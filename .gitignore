@@ -1,0 +1,24 @@
+# Python bytecode and local environments
+__pycache__/
+*.py[cod]
+*.so
+.venv/
+
+# Experiment artifacts
+data/*
+!data/.gitkeep
+results/*
+!results/.gitkeep
+figures/
+outputs/
+checkpoints/
+cache/
+wandb/
+*.pt
+*.pth
+*.npz
+*.log
+
+# Local configuration and operating-system files
+.env
+.DS_Store

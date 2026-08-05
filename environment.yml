@@ -1,0 +1,11 @@
+name: ffa-theory
+channels:
+  - conda-forge
+dependencies:
+  - python=3.11
+  - pip
+  - numpy=2.4.3
+  - matplotlib=3.10.8
+  - pip:
+      - datasets==4.8.4
+      - tiktoken==0.12.0
