@@ -3,6 +3,7 @@
 **Paper output:** Appendix Tables 5–6.
 
 This directory contains the benchmark runner, shared model utilities, BP baseline, and the `algos/` registry.
+The `muon_ffa` entry is self-contained: `muon_optimizer.py` implements its local Muon--AdamW optimizer pair.
 Example smoke test:
 
 ```bash
