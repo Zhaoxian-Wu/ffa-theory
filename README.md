@@ -3,7 +3,7 @@
 Official code for **The Price of Locality: Why Forward-Forward Underperforms
 Backpropagation?** by Zhaoxian Wu, Haichuan Liu, and Tianyi Chen.
 
-[Paper](https://arxiv.org/abs/2609.33240) ·
+[Paper](https://arxiv.org/abs/2609.33240)
 [PDF](https://arxiv.org/pdf/2609.33240)
 
 The paper studies the optimization and representation limitations of
@@ -137,13 +137,11 @@ directory. Dataset and result locations are supplied by the reader.
 ## Citation
 
 ```bibtex
-@misc{wu2026pricelocality,
+@inproceedings{wu2026pricelocality,
   title         = {The Price of Locality: Why Forward-Forward Underperforms Backpropagation?},
   author        = {Zhaoxian Wu and Haichuan Liu and Tianyi Chen},
+  booktitle     = {Advances in Neural Information Processing Systems},
   year          = {2026},
-  eprint        = {2609.33240},
-  archivePrefix = {arXiv},
-  primaryClass  = {cs.LG},
   url           = {https://arxiv.org/abs/2609.33240}
 }
 ```
