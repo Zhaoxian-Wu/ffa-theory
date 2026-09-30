@@ -1,200 +1,149 @@
 # The Price of Locality: Why Forward-Forward Underperforms Backpropagation?
 
-Official code repository for the paper *The Price of Locality: Why Forward-Forward Underperforms Backpropagation?*.
+Official code for **The Price of Locality: Why Forward-Forward Underperforms
+Backpropagation?** by Zhaoxian Wu, Haichuan Liu, and Tianyi Chen.
 
-Reproducibility code for the experiments in the accompanying Forward-Forward Algorithm (FFA) theory manuscript.
-The repository is organized in manuscript order: one top-level directory per experimental group.
-Figure and table numbers refer to the reader-visible numbering in the compiled paper.
+[Paper](https://arxiv.org/abs/2609.33240) ·
+[PDF](https://arxiv.org/pdf/2609.33240)
 
-## Scope and reproducibility status
+The paper studies the optimization and representation limitations of
+Forward-Forward learning relative to backpropagation. The experiments cover
+multi-layer convergence, image classification, controlled locality and spectral
+interventions, representation and error-signal ranks, and Transformer scaling.
 
-Every compiled-paper experiment has a corresponding directory.
-Where the exact historical implementation was not recovered, that limitation is stated explicitly rather than represented as reproducible code.
+## Experiments
 
-| Directory | Paper output | Status |
+The repository follows manuscript order, with one numbered directory per
+experimental group. Figure and table numbers refer to the paper.
+
+| Directory | Experiment | Paper output |
 | --- | --- | --- |
-| `01_toy_multilayer_convergence` | Figure 1 (left) | Historical runner is included. |
-| `02_cifar10_resnet_image_classification` | Figure 1 (right), Figure 2, Appendix Figures 4–5, Appendix Tables 7–10 | Figure 2 plotting code is included; the training/readout code has not been recovered. |
-| `03_cifar10_unified_benchmark` | Appendix Tables 5–6 | Benchmark runners and algorithm registry are included. |
-| `04_cifar10_spectral_intervention` | Table 3 (left and right panels) | Intervention and Jacobian-diagnostic code are included. |
-| `05_cnn_locality_intervention` | Table 1 | CNN12 locality-sweep code is included. |
-| `06_owt_transformer_scaling` | Table 2 | Packaged Transformer scaling implementation is included. |
-| `07_cifar10_rank_trajectories` | Appendix Figure 3 | Trajectory runners and renderers are included. |
-| `08_cifar10_cnn_vit` | Appendix Table 4 | Candidate historical CNN/ViT implementations are included; exact provenance remains to be audited. |
+| [01_toy_multilayer_convergence](01_toy_multilayer_convergence/) | Multi-layer FFA convergence and depth-dependent error floors. | Figure 1 (left) |
+| [02_cifar10_resnet_image_classification](02_cifar10_resnet_image_classification/) | ResNet training, detached readout, depth and task-difficulty scaling, and training-recipe comparisons. | Figure 1 (right), Figure 2, Appendix Figures 4–5 and Tables 7–10 |
+| [03_cifar10_unified_benchmark](03_cifar10_unified_benchmark/) | Local-learning algorithms on shared CNN3/6/9 backbones. | Appendix Tables 5–6 |
+| [04_cifar10_spectral_intervention](04_cifar10_spectral_intervention/) | Spectral interpolation and Jacobian-concentration diagnostics. | Table 3 |
+| [05_cnn_locality_intervention](05_cnn_locality_intervention/) | Grouped-goodness FFA with different gradient horizons on a fixed CNN12. | Table 1 |
+| [06_owt_transformer_scaling](06_owt_transformer_scaling/) | Transformer pre-training on OpenWebText under Chinchilla-style budgets. | Table 2 |
+| [07_cifar10_rank_trajectories](07_cifar10_rank_trajectories/) | Representation and error-signal effective ranks during CNN training. | Appendix Figure 3 |
+| [08_cifar10_cnn_vit](08_cifar10_cnn_vit/) | BP and FFA on CNN and Vision Transformer architectures. | Appendix Table 4 |
 
-## Repository layout
+Each directory provides its own README and experiment entry points. The spectral,
+locality, and rank-trajectory experiments share the CNN benchmark implementation
+through relative links to `03_cifar10_unified_benchmark`.
 
-```text
-ffa-theory/
-├── 01_toy_multilayer_convergence/
-├── 02_cifar10_resnet_image_classification/
-├── 03_cifar10_unified_benchmark/
-├── 04_cifar10_spectral_intervention/
-├── 05_cnn_locality_intervention/
-├── 06_owt_transformer_scaling/
-├── 07_cifar10_rank_trajectories/
-└── 08_cifar10_cnn_vit/
-```
+## Installation
 
-Each directory is self-contained: executable scripts are placed directly in the experiment directory, not behind an additional `src/` layer.
-The spectral, locality, and rank-trajectory experiments reuse the shared CIFAR-10 benchmark implementation through relative symbolic links to `03_cifar10_unified_benchmark`.
-
-## Environment setup
-
-The repository was validated with Python 3.11.15, PyTorch 2.10.0, torchvision 0.25.0, NumPy 2.4.3, and Matplotlib 3.10.8.
-Formal CIFAR-10 and Transformer reproductions require a CUDA GPU; CPU is appropriate only for brief smoke tests.
-
-### 1. Create the Conda environment
+Create the environment from the repository root:
 
 ```bash
-git clone https://github.com/Zhaoxian-Wu/ffa-theory.git
-cd ffa-theory
 conda env create -f environment.yml
 conda activate ffa-theory
 ```
 
-`environment.yml` pins the Python, NumPy, Matplotlib, `datasets`, and `tiktoken` versions used for validation.
-PyTorch is deliberately installed in the next step because its wheel must match the local CUDA runtime.
-
-### 2. Install PyTorch and the package
-
-For CUDA 12.8, the validated configuration is:
+Install PyTorch and torchvision for your CUDA runtime. The existing environment
+configuration was used with PyTorch 2.10.0 and torchvision 0.25.0. For CUDA 12.8:
 
 ```bash
-python -m pip install --upgrade pip
 python -m pip install torch==2.10.0 torchvision==0.25.0 \
   --index-url https://download.pytorch.org/whl/cu128
+```
+
+For the Transformer experiments, also install the package:
+
+```bash
 python -m pip install -e 06_owt_transformer_scaling
 ```
 
-For another CUDA version or CPU-only execution, install the matching `torch`/`torchvision` pair from the official PyTorch installation selector, then run the final editable-install command above.
+The ResNet module uses PyTorch, torchvision, NumPy, and Pillow; these dependencies
+are also listed in `requirements.txt`. Plotting scripts use Matplotlib. Full
+training experiments are intended for a CUDA GPU.
 
-### 3. Verify the installation
+## ResNet image-classification experiments
 
-```bash
-python -c "import torch, torchvision, numpy, matplotlib; print(torch.__version__); print(torch.cuda.is_available())"
-python -m local_learning_nanogpt.experiments.cli --help
-```
+The ResNet module includes native training, detached readout, dataset
+preprocessing, baseline and hardened recipes, and result aggregation.
 
-Set `CUDA_VISIBLE_DEVICES` before running GPU jobs when needed.
-The historical Figure 1 toy runner is the exception: it explicitly selects `cuda:1`.
+| Dimension | Settings |
+| --- | --- |
+| Architecture | ResNet18, ResNet24, ResNet56, ResNet108 |
+| Dataset | MNIST, CIFAR-10, CIFAR-100, Tiny ImageNet |
+| Methods | BP, LCE, SFF, Distance-Forward, Vanilla FFA, SCFF, SymBa, LayerCollab, Trifecta |
+| Readout | Linear classifier on detached, pooled stem and residual-stage outputs |
+| Paper training budget | 200 epochs, batch size 128, seed 0 |
 
-## Data and generated artifacts
+MNIST and CIFAR-10 use all nine methods. CIFAR-100 and Tiny ImageNet compare BP,
+LCE, SFF, and Distance-Forward under both training recipes. The hardened recipe
+adds stronger augmentation and regularization; on Tiny ImageNet it also changes
+the input resolution from 32 × 32 to 64 × 64.
 
-CIFAR-10 scripts use `torchvision`.
-The unified benchmark and spectral intervention can download CIFAR-10 on first use; the Jacobian diagnostic expects an existing dataset under its `data/cifar10` directory.
-Use the data-preparation utilities under `06_owt_transformer_scaling/local_learning_nanogpt/data_prep/` and obey the dataset's terms of use.
+**LCE is the paper's display name for `nokland_lpredsim`.** The implementation
+uses the original `0.99 * CE + 0.01 * similarity_loss` objective. See the
+[ResNet README](02_cifar10_resnet_image_classification/README.md) for the complete
+algorithm mapping, optimizer settings, and evaluation protocol.
 
-Store generated artifacts in the corresponding experiment's `data/`, `results/`, `figures/`, or `cache/` directory, as applicable.
-
-## Running experiments
-
-Run commands below from the repository root.
-First inspect `--help` for the full configuration surface.
-Commands marked **smoke test** intentionally use small budgets and do not reproduce a paper result.
-
-### 01. Toy multi-layer convergence — Figure 1 (left)
-
-```bash
-python 01_toy_multilayer_convergence/exp2_multi_layer.py --force
-```
-
-The historical runner launches four processes and currently selects `cuda:1` internally.
-It performs 200,000 iterations per depth and writes its cache and PDF to `01_toy_multilayer_convergence/cache/` and `01_toy_multilayer_convergence/figures/`, respectively.
-
-### 02. CIFAR-10 ResNet image classification — Figure 2
+Run from the ResNet experiment directory:
 
 ```bash
 cd 02_cifar10_resnet_image_classification
-python plot_cifar10_resnet_bench.py
+
+python train.py --dataset cifar10 --arch resnet18 --algo bp \
+  --data-dir "<dataset-directory>" --output "<result-file.json>"
+
+python train.py --dataset cifar100 --arch resnet56 --algo nokland_lpredsim \
+  --recipe hardened \
+  --data-dir "<dataset-directory>" --output "<result-file.json>"
 ```
 
-This regenerates Figure 2 from the reported mean accuracies embedded in the plotting script.
-It is not a training implementation.
-The exact code for Figure 1 (right), Appendix Figures 4–5, and Appendix Tables 7–10 has not yet been located.
+Replace the angle-bracket placeholders with your dataset directory and a separate
+result filename for each configuration. Each result contains native and readout
+accuracy curves, best/final accuracies, and the training configuration.
 
-### 03. Unified CIFAR-10 benchmark — Appendix Tables 5–6
+Aggregate result files to compare accuracy, readout-minus-native differences, and
+baseline-to-hardened gains:
 
 ```bash
-python 03_cifar10_unified_benchmark/run_benchmark.py \
-  --algos bp --arch cnn3 --quick --device cuda \
-  --out_dir 03_cifar10_unified_benchmark/results/smoke
+python aggregate_results.py "<baseline-result.json>" "<hardened-result.json>"
+python aggregate_results.py --metric final "<baseline-result.json>" "<hardened-result.json>"
 ```
 
-Replace `--quick` with `--epochs 200` and provide the paper's full algorithm, architecture, and seed matrix for a formal reproduction.
-Aggregate result JSON files with `aggregate_results.py` or `aggregate_consolidated.py`.
+The existing `plot_cifar10_resnet_bench.py` renders Figure 2 from the reported
+values embedded in that script. `train.py` and `aggregate_results.py` operate on
+new training runs.
 
-### 04. Spectral intervention — Table 3
+## Other experiment entry points
 
-Left panel, short smoke test:
+| Experiment | Main scripts or package |
+| --- | --- |
+| Toy convergence | `01_toy_multilayer_convergence/exp2_multi_layer.py` |
+| Unified CNN benchmark | `03_cifar10_unified_benchmark/run_benchmark.py` and `aggregate_results.py` |
+| Spectral intervention | `04_cifar10_spectral_intervention/rank_control_intervention.py` and `jacobian_concentration/` |
+| Locality intervention | `05_cnn_locality_intervention/locality_block_sweep.py` and `aggregate_locality_block_sweep.py` |
+| Transformer scaling | `local_learning_nanogpt.experiments.cli` in `06_owt_transformer_scaling/` |
+| Rank trajectories | `07_cifar10_rank_trajectories/train_bp_ffa_sigma_gamma_matched_trajectory.py` and the accompanying renderers |
+| CNN/ViT comparison | `08_cifar10_cnn_vit/cnn_vit_ffa_vs_bp.py` and `b_r3a_cnn_vit.py` |
 
-```bash
-python 04_cifar10_spectral_intervention/rank_control_intervention.py \
-  --algorithms bp --conditions baseline --epochs 1 --device cuda \
-  --max-train-batches 1 --max-test-batches 1 \
-  --output-root 04_cifar10_spectral_intervention/results/smoke
+Use each experiment's README for its training and evaluation protocol. The
+CNN/ViT directory contains candidate historical implementations; their exact
+correspondence to the final Table 4 protocol remains to be verified.
+
+## Data
+
+Image-classification experiments use torchvision datasets. The ResNet loader
+downloads MNIST and CIFAR datasets if needed. Tiny ImageNet must be supplied in
+its original extracted layout, including the validation annotations. OpenWebText
+preparation utilities are provided in the Transformer package's `data_prep/`
+directory. Dataset and result locations are supplied by the reader.
+
+## Citation
+
+```bibtex
+@misc{wu2026pricelocality,
+  title         = {The Price of Locality: Why Forward-Forward Underperforms Backpropagation?},
+  author        = {Zhaoxian Wu and Haichuan Liu and Tianyi Chen},
+  year          = {2026},
+  eprint        = {2609.33240},
+  archivePrefix = {arXiv},
+  primaryClass  = {cs.LG},
+  url           = {https://arxiv.org/abs/2609.33240}
+}
 ```
-
-Right panel (requires prepared CIFAR-10 data and CUDA):
-
-```bash
-python 04_cifar10_spectral_intervention/jacobian_concentration/measure_init_resnet18_tau_j.py \
-  --data-dir 04_cifar10_spectral_intervention/jacobian_concentration/data/cifar10 \
-  --out 04_cifar10_spectral_intervention/jacobian_concentration/results/init_resnet18_tau_j.json
-```
-
-The aggregation and plotting scripts in `04_cifar10_spectral_intervention/` consume the JSON outputs from the complete seed sweep.
-
-### 05. CNN locality intervention — Table 1
-
-```bash
-python 05_cnn_locality_intervention/locality_block_sweep.py \
-  --layers-per-block 1 --epochs 1 --device cuda:0 \
-  --max-train-batches 1 --max-test-batches 1 --max-probe-batches 1 \
-  --out-root 05_cnn_locality_intervention/results/smoke
-```
-
-For the formal sweep, evaluate each allowed `--layers-per-block` value (`1, 2, 3, 4, 6, 12`) over the paper's seed schedule, then run `aggregate_locality_block_sweep.py` and `summarize_locality_erank_metrics.py`.
-
-### 06. OpenWebText Transformer scaling — Table 2
-
-```bash
-python -m local_learning_nanogpt.experiments.cli scaling \
-  --dataset shakespeare --profile quick --algorithms bp \
-  --optimizers adam --scales tiny --device cuda --gpu 0 \
-  --max-iters 1 --batch-size 1 --block-size 8 --eval-interval 1 \
-  --probe-iters 0 --output-name smoke
-```
-
-This is a CLI smoke test after installing the package above.
-Table 2 instead uses the OpenWebText configuration and Chinchilla-style budget specified in the manuscript.
-Consult the package's `data_prep/` utilities before running an OpenWebText job.
-
-### 07. CIFAR-10 rank trajectories — Appendix Figure 3
-
-```bash
-python 07_cifar10_rank_trajectories/train_bp_ffa_gamma_erank_trajectory.py \
-  --archs cnn3 --epochs 1 --probe-epochs 0 1 --device cuda:0 \
-  --out-dir 07_cifar10_rank_trajectories/results/smoke
-```
-
-The `render_bp_ffa_gamma_erank_trajectory.py` and `plot_scaled_erank_curves.py` scripts render trajectories after the full training and probe sweep has finished.
-
-### 08. CNN/ViT comparison — Appendix Table 4
-
-The two included scripts are candidate historical implementations and download CIFAR-10 to `/tmp/cifar10_data` when run.
-Their exact relation to the final Table 4 protocol has not yet been verified, so this directory is provided for audit rather than as a certified reproduction command.
-
-## Reproducibility notes
-
-- Use explicit `--out-dir` or `--output-root` paths to keep artifacts local to
-the experiment directory.
-- Set `--device`, `--gpu`, seeds, epochs, and dataset paths explicitly for a
-reproducible run; defaults are historical and may be machine-specific.
-- A successful smoke test validates the command path only.  It does not
-validate agreement with a reported paper number.
-
-## Citation and license
-
-Citation metadata will be added when the accompanying manuscript is publicly released.
-A license has not yet been added; until then, reuse requires permission from the authors.
