@@ -1,0 +1,2961 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="The Price of Locality studies why the Forward-Forward Algorithm underperforms backpropagation as neural networks become deeper and larger.">
+  <meta name="theme-color" content="#ffffff">
+  <meta property="og:title" content="The Price of Locality">
+  <meta property="og:description" content="Why the Forward-Forward Algorithm underperforms backpropagation.">
+  <meta property="og:type" content="website">
+  <title>The Price of Locality — Forward-Forward Algorithm</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=Source+Serif+4:opsz,wght@8..60,400;8..60,600;8..60,700&amp;display=swap" rel="stylesheet">
+
+  <script>
+    window.MathJax = {
+      tex: {
+        inlineMath: [['$', '$'], ['\\(', '\\)']],
+        displayMath: [['$$', '$$'], ['\\[', '\\]']],
+        processEscapes: true,
+        tags: 'none'
+      },
+      options: {
+        skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']
+      }
+    };
+  </script>
+  <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+
+  <style>
+    :root {
+      --primary: #4485c7;
+      --primary-dark: #1f4ca7;
+      --primary-soft: #f0f6ff;
+      --ffa: #d87822;
+      --ffa-soft: #fff5e8;
+      --bp: #3275bf;
+      --bp-soft: #edf5ff;
+      --ink: #0f172a;
+      --text: #1f2937;
+      --muted: #64748b;
+      --faint: #94a3b8;
+      --border: #e3e8ef;
+      --soft: #f7f9fc;
+      --softer: #fbfcfe;
+      --success: #16856f;
+      --serif: "Source Serif 4", "Source Serif Pro", Charter, Georgia, "Times New Roman", serif;
+      --sans: Inter, "Segoe UI", -apple-system, BlinkMacSystemFont, sans-serif;
+      --mono: "JetBrains Mono", "SFMono-Regular", Consolas, monospace;
+    }
+
+    * { box-sizing: border-box; }
+
+    html {
+      scroll-behavior: smooth;
+      scroll-padding-top: 30px;
+    }
+
+    body {
+      margin: 0;
+      color: var(--text);
+      background: #fff;
+      font-family: var(--sans);
+      font-size: 16px;
+      line-height: 1.68;
+      letter-spacing: -0.003em;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    a { color: var(--primary-dark); }
+    button, input { font: inherit; }
+
+    .skip-link {
+      position: fixed;
+      top: 8px;
+      left: 8px;
+      z-index: 100;
+      padding: 8px 13px;
+      color: #fff;
+      background: var(--ink);
+      border-radius: 6px;
+      transform: translateY(-150%);
+    }
+
+    .skip-link:focus { transform: translateY(0); }
+
+    .masthead {
+      border-bottom: 1px solid var(--border);
+      background: rgba(255, 255, 255, 0.96);
+    }
+
+    .masthead-inner {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      width: min(1180px, calc(100% - 42px));
+      min-height: 58px;
+      margin: 0 auto;
+    }
+
+    .site-name {
+      color: var(--ink);
+      font-size: 15px;
+      font-weight: 700;
+      text-decoration: none;
+    }
+
+    .masthead-links {
+      display: flex;
+      align-items: center;
+      gap: 22px;
+    }
+
+    .masthead-links a {
+      color: var(--muted);
+      font-size: 14px;
+      text-decoration: none;
+    }
+
+    .masthead-links a:hover { color: var(--ink); }
+
+    .project-wrap {
+      display: grid;
+      grid-template-columns: 220px minmax(0, 1fr);
+      gap: 56px;
+      width: min(1180px, 100%);
+      margin: 0 auto;
+      padding: 38px 28px 100px;
+    }
+
+    .project-toc { position: relative; }
+
+    .project-toc-sticky {
+      position: sticky;
+      top: 28px;
+      max-height: calc(100vh - 56px);
+      overflow-y: auto;
+      padding: 4px 0;
+      scrollbar-width: thin;
+    }
+
+    .project-toc-label {
+      margin: 0 0 10px 14px;
+      color: var(--faint);
+      font-size: 11px;
+      font-weight: 750;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+    }
+
+    .project-toc-nav ul {
+      margin: 0;
+      padding: 0;
+      border-left: 1px solid var(--border);
+      list-style: none;
+    }
+
+    .project-toc-nav ul ul {
+      margin-left: 4px;
+      border-left: 0;
+    }
+
+    .project-toc-nav li { margin: 0; }
+
+    .project-toc-nav a {
+      display: block;
+      margin-left: -1px;
+      padding: 5px 14px;
+      color: var(--muted);
+      border-left: 2px solid transparent;
+      font-size: 13px;
+      line-height: 1.4;
+      text-decoration: none;
+      transition: color 150ms, border-color 150ms, background 150ms;
+    }
+
+    .project-toc-nav li.toc-sub > a {
+      padding: 4px 14px 4px 22px;
+      color: var(--faint);
+      font-size: 12px;
+    }
+
+    .project-toc-nav a:hover {
+      color: var(--ink);
+      background: rgba(68, 133, 199, 0.05);
+    }
+
+    .project-toc-nav a.active {
+      color: var(--primary-dark);
+      background: rgba(68, 133, 199, 0.06);
+      border-left-color: var(--primary);
+      font-weight: 650;
+    }
+
+    .project-main { min-width: 0; }
+
+    .project-hero {
+      margin-bottom: 31px;
+      padding: 14px 0 39px;
+      border-bottom: 1px solid var(--border);
+      text-align: center;
+    }
+
+    .project-title {
+      max-width: 880px;
+      margin: 0 auto 16px;
+      color: var(--ink);
+      font-family: var(--serif);
+      font-size: clamp(2.15rem, 4.5vw, 3.15rem);
+      font-weight: 700;
+      letter-spacing: -0.022em;
+      line-height: 1.13;
+    }
+
+    .project-subtitle {
+      max-width: 730px;
+      margin: 0 auto 23px;
+      color: #475569;
+      font-size: 18px;
+      line-height: 1.48;
+    }
+
+    .project-authors {
+      margin-bottom: 5px;
+      color: var(--ink);
+      font-size: 16px;
+      line-height: 1.7;
+    }
+
+    .project-authors a {
+      color: var(--ink);
+      text-decoration: none;
+      border-bottom: 1px solid transparent;
+    }
+
+    .project-authors a:hover {
+      color: var(--primary);
+      border-bottom-color: var(--primary);
+    }
+
+    .author-sep { margin: 0 5px; color: var(--faint); }
+
+    .project-affiliation {
+      margin-bottom: 13px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .project-venue {
+      display: inline-block;
+      margin: 3px 0;
+      padding: 4px 12px;
+      color: var(--primary-dark);
+      background: var(--primary-soft);
+      border: 1px solid #d5e3f7;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 750;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+
+    .project-links {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 10px;
+      margin: 21px 0 3px;
+    }
+
+    .project-button {
+      display: inline-flex;
+      align-items: stretch;
+      overflow: hidden;
+      color: #fff;
+      background: var(--ink);
+      border: 1px solid var(--ink);
+      border-radius: 9px;
+      font-size: 14px;
+      font-weight: 550;
+      text-decoration: none;
+      transition: transform 180ms, box-shadow 180ms, background 180ms;
+    }
+
+    .project-button:hover {
+      color: #fff;
+      background: var(--primary);
+      border-color: var(--primary);
+      box-shadow: 0 6px 16px rgba(68, 133, 199, 0.27);
+      transform: translateY(-1px);
+    }
+
+    .button-icon {
+      display: grid;
+      place-items: center;
+      width: 36px;
+      background: rgba(255, 255, 255, 0.12);
+      border-right: 1px solid rgba(255, 255, 255, 0.14);
+    }
+
+    .button-icon svg {
+      width: 17px;
+      height: 17px;
+      fill: currentColor;
+    }
+
+    .button-label { padding: 8px 15px; }
+
+    .project-content {
+      max-width: 780px;
+      margin: 0 auto;
+      color: var(--text);
+      font-size: 16px;
+    }
+
+    .project-content p { margin: 0 0 1.08em; }
+
+    .project-content h2 {
+      margin: 2.45em 0 0.72em;
+      padding-bottom: 0.35em;
+      color: var(--ink);
+      border-bottom: 1px solid var(--border);
+      font-family: var(--serif);
+      font-size: 28px;
+      font-weight: 700;
+      letter-spacing: -0.01em;
+      line-height: 1.25;
+      scroll-margin-top: 24px;
+    }
+
+    .project-content h2:first-child { margin-top: 0; }
+
+    .project-content h3 {
+      margin: 1.75em 0 0.52em;
+      color: var(--primary-dark);
+      font-family: var(--serif);
+      font-size: 20px;
+      font-weight: 700;
+      scroll-margin-top: 24px;
+    }
+
+    .project-content > h4 {
+      margin: 1.55em 0 0.45em;
+      color: var(--ink);
+      font-size: 17px;
+      font-weight: 700;
+      scroll-margin-top: 24px;
+    }
+
+    .project-content strong { color: var(--ink); }
+
+    .project-content a {
+      color: var(--primary-dark);
+      text-decoration-color: rgba(68, 133, 199, 0.42);
+      text-underline-offset: 2px;
+    }
+
+    .tldr {
+      padding: 20px 22px;
+      background: var(--primary-soft);
+      border: 1px solid #dae6f5;
+      border-radius: 9px;
+    }
+
+    .tldr h2 {
+      margin: 0 0 10px;
+      padding: 0;
+      border: 0;
+      font-size: 22px;
+    }
+
+    .tldr ul { margin: 0; padding-left: 1.25em; }
+    .tldr li { margin: 7px 0; }
+
+    .ffa-origin { margin: 0 0 1.25em; color: var(--muted); font-size: 14px; }
+
+    .ffa-example {
+      margin: 1.8em 0 2em;
+      padding: 20px;
+      background: var(--softer);
+      border: 1px solid var(--border);
+      border-radius: 9px;
+    }
+
+    .ffa-example h3 {
+      margin: 0 0 0.35em;
+      color: var(--ink);
+      font-family: var(--serif);
+      font-size: 21px;
+    }
+
+    .ffa-example-intro { margin: 0 0 16px; font-size: 14px; }
+
+    .ffa-example-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+    }
+
+    .ffa-example-path {
+      min-width: 0;
+      padding: 16px;
+      background: #fff;
+      border: 1px solid var(--border);
+      border-top: 3px solid var(--success);
+      border-radius: 8px;
+    }
+
+    .ffa-example-path.negative { border-top-color: var(--ffa); }
+    .ffa-example-path > strong { display: block; margin-bottom: 11px; font-size: 14px; }
+
+    .ffa-input-pair { display: flex; align-items: center; gap: 9px; }
+
+    .ffa-input-pair img {
+      width: 86px;
+      height: 72px;
+      object-fit: cover;
+      border-radius: 5px;
+    }
+
+    .ffa-pair-plus { color: var(--muted); font-size: 20px; font-weight: 600; }
+
+    .ffa-label-token {
+      padding: 5px 9px;
+      color: #0b614f;
+      background: #e5f7ee;
+      border: 1px solid #a6dcc3;
+      border-radius: 5px;
+      font-size: 12px;
+      font-weight: 750;
+    }
+
+    .negative .ffa-label-token { color: #92400e; background: var(--ffa-soft); border-color: #f1cda8; }
+
+    .ffa-pair-caption { margin: 7px 0 11px !important; color: var(--muted); font-size: 11px; }
+
+    .ffa-class-cue { display: flex; align-items: center; gap: 9px; margin: 0 0 11px; color: var(--muted); font-size: 11px; }
+    .ffa-class-cue img { width: 74px; height: 56px; object-fit: cover; border-radius: 5px; }
+
+    .ffa-layer-flow {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 16px;
+      margin-bottom: 9px;
+    }
+
+    .ffa-layer-flow span {
+      position: relative;
+      padding: 7px 4px;
+      background: #eaf7f0;
+      border-radius: 5px;
+      color: #0b614f;
+      font-size: 12px;
+      font-weight: 700;
+      text-align: center;
+    }
+
+    .ffa-layer-flow span:not(:last-child)::after {
+      position: absolute;
+      top: 50%;
+      right: -14px;
+      color: var(--muted);
+      content: "→";
+      font-size: 14px;
+      transform: translateY(-50%);
+    }
+
+    .negative .ffa-layer-flow span { color: #92400e; background: var(--ffa-soft); }
+    .ffa-example-path > p:last-child { margin: 0; font-size: 12px; }
+
+    .ffa-example-note { margin: 13px 0 0 !important; font-size: 13px; }
+
+    .ffa-example-source {
+      margin-top: 14px;
+      padding-top: 11px;
+      border-top: 1px solid var(--border);
+      color: var(--muted);
+      font-size: 11px;
+    }
+
+    .ffa-example-source p { margin: 0; }
+
+    .callout {
+      margin: 1.65em 0;
+      padding: 4px 0 4px 18px;
+      border-left: 2px solid var(--primary);
+      font-size: 15px;
+    }
+
+    .callout p { margin: 0; }
+    .callout strong:first-child { color: var(--primary-dark); }
+
+    .gap-comparison {
+      margin: 1.55em 0;
+      padding: 20px;
+      background: var(--softer);
+      border: 1px solid var(--border);
+      border-radius: 9px;
+    }
+
+    .gap-comparison-head {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 14px;
+      margin-bottom: 17px;
+    }
+
+    .gap-comparison-head strong { font-size: 15px; }
+
+    .gap-comparison-head span {
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .gap-row {
+      display: grid;
+      grid-template-columns: 104px minmax(0, 1fr) 74px;
+      align-items: center;
+      gap: 11px;
+      margin: 11px 0;
+    }
+
+    .gap-row-label {
+      color: var(--text);
+      font-size: 13px;
+      font-weight: 650;
+    }
+
+    .gap-track {
+      height: 15px;
+      overflow: hidden;
+      background: #e8edf3;
+      border-radius: 3px;
+    }
+
+    .gap-bar {
+      display: block;
+      width: var(--value);
+      height: 100%;
+      background: var(--ffa);
+    }
+
+    .gap-row.bp .gap-bar { background: var(--bp); }
+
+    .gap-value {
+      color: var(--ink);
+      font-family: var(--mono);
+      font-size: 13px;
+      font-weight: 650;
+      text-align: right;
+    }
+
+    .gap-summary {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 15px;
+      margin-top: 16px;
+      padding-top: 13px;
+      border-top: 1px solid var(--border);
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .gap-summary strong {
+      color: var(--ink);
+      font-family: var(--mono);
+      font-size: 18px;
+    }
+
+    .design-list {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+      margin: 1.4em 0;
+      padding: 0;
+      list-style: none;
+    }
+
+    .design-list li {
+      padding: 14px 15px 14px 39px;
+      background: var(--softer);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    .design-list li::before {
+      float: left;
+      margin-left: -24px;
+      color: var(--success);
+      content: "→";
+      font-weight: 750;
+    }
+
+    /* BP/FFA animation comparison */
+    .comparison-figure {
+      width: 100%;
+      max-width: 100%;
+      margin: 1.7em 0 2em;
+    }
+
+    .comparison-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 15px;
+    }
+
+    .animation-panel {
+      min-width: 0;
+      padding: 19px 19px 16px;
+      background: #fff;
+      border: 1px solid var(--border);
+      border-radius: 9px;
+      box-shadow: 0 2px 9px rgba(15, 23, 42, 0.05);
+    }
+
+    .animation-panel.bp-panel { border-top: 3px solid var(--bp); }
+    .animation-panel.ffa-panel { border-top: 3px solid var(--ffa); }
+
+    .animation-head {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 14px;
+    }
+
+    .animation-head h3 {
+      margin: 0;
+      color: var(--ink);
+      font-family: var(--sans);
+      font-size: 16px;
+    }
+
+    .animation-head span {
+      color: var(--muted);
+      font-size: 11px;
+      text-align: right;
+    }
+
+    .animated-network {
+      min-width: 0;
+      padding: 0 2px;
+    }
+
+    .flow-direction {
+      margin: 0 0 8px;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 650;
+      letter-spacing: 0.02em;
+    }
+
+    .objective-track {
+      display: grid;
+      grid-template-columns: repeat(6, minmax(0, 1fr));
+      gap: 7px;
+      align-items: end;
+      height: 35px;
+      margin-bottom: 7px;
+    }
+
+    .objective-node {
+      position: relative;
+      justify-self: center;
+      width: 12px;
+      height: 12px;
+      border: 2px solid #d8e0e9;
+      border-radius: 50%;
+      background: #fff;
+      transition: background 180ms, border-color 180ms, transform 180ms;
+    }
+
+    .objective-node::after {
+      position: absolute;
+      top: 10px;
+      left: 3px;
+      width: 2px;
+      height: 11px;
+      content: "";
+      background: currentColor;
+      opacity: 0.22;
+    }
+
+    .objective-node.is-active {
+      color: var(--ffa);
+      background: var(--ffa);
+      border-color: var(--ffa);
+      transform: scale(1.2);
+    }
+
+    .objective-node.is-active::after { opacity: 0.9; }
+
+    .objective-node.is-complete {
+      background: #f4d3b3;
+      border-color: #f4d3b3;
+    }
+
+    .bp-panel .objective-node {
+      color: var(--bp);
+    }
+
+    .bp-panel .objective-node.is-active {
+      background: var(--bp);
+      border-color: var(--bp);
+    }
+
+    .layer-track {
+      position: relative;
+      display: grid;
+      grid-template-columns: repeat(6, minmax(0, 1fr));
+      align-items: center;
+      gap: 7px;
+    }
+
+    .layer-track::before {
+      position: absolute;
+      right: 2%;
+      left: 2%;
+      top: 50%;
+      z-index: 0;
+      height: 2px;
+      content: "";
+      background: #cbd5e1;
+    }
+
+    .anim-layer {
+      position: relative;
+      z-index: 1;
+      display: grid;
+      place-items: center;
+      aspect-ratio: 1;
+      max-width: 48px;
+      width: 100%;
+      margin: auto;
+      color: #415169;
+      background: #fff;
+      border: 1px solid #cbd5e1;
+      border-radius: 8px;
+      font-size: 11px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: color 180ms, background 180ms, border-color 180ms, box-shadow 180ms;
+    }
+
+    .anim-layer.is-stored {
+      color: #334155;
+      background: #e9edf2;
+      border-color: #aebbc9;
+    }
+
+    .anim-layer.is-stored::before {
+      position: absolute;
+      bottom: 4px;
+      left: calc(50% - 6px);
+      width: 12px;
+      height: 3px;
+      content: "";
+      background: #65758b;
+      border-radius: 2px;
+    }
+
+    .anim-layer.is-updated {
+      color: #0b614f;
+      background: #dcf5eb;
+      border-color: #65bba4;
+    }
+
+    .anim-layer.is-updated::after {
+      position: absolute;
+      top: -6px;
+      right: -5px;
+      display: grid;
+      place-items: center;
+      width: 15px;
+      height: 15px;
+      content: "✓";
+      color: #fff;
+      background: var(--success);
+      border-radius: 50%;
+      font-size: 10px;
+      line-height: 1;
+    }
+
+    .anim-layer.is-current { box-shadow: 0 0 0 3px rgba(50, 117, 191, 0.2); }
+    .ffa-panel .anim-layer.is-current { box-shadow: 0 0 0 3px rgba(216, 120, 34, 0.2); }
+    .anim-layer:is(:hover, :focus-visible, .is-inspected) {
+      color: #fff;
+      background: #334155;
+      border-color: #334155;
+    }
+    .anim-layer.is-stored:is(:hover, :focus-visible, .is-inspected)::before { background: #fff; }
+    .anim-layer:focus-visible { outline: 2px solid var(--ink); outline-offset: 3px; }
+
+    .flow-status {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      min-height: 45px;
+      margin-top: 12px;
+      font-size: 11px;
+      line-height: 1.4;
+    }
+
+    .flow-status span:first-child { color: var(--text); }
+    .flow-status strong { flex-shrink: 0; color: var(--bp); font-weight: 700; }
+    .ffa-panel .flow-status strong { color: var(--ffa); }
+
+    .comparison-controls {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 10px 16px;
+      margin-top: 12px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .comparison-controls p { flex: 1 1 260px; margin: 0; }
+    .comparison-controls button {
+      padding: 5px 10px;
+      color: var(--text);
+      background: #fff;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 12px;
+    }
+    .comparison-controls button:hover { border-color: var(--primary); }
+    .comparison-controls button:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+
+    .memory-chart {
+      margin-top: 15px;
+      padding: 14px 16px 10px;
+      border: 1px solid var(--border);
+      border-radius: 9px;
+    }
+
+    .memory-chart[hidden] { display: none; }
+
+    .memory-chart:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+
+    .memory-chart-head {
+      display: flex;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 3px 12px;
+      font-size: 12px;
+    }
+
+    .memory-chart-head strong { color: var(--ink); }
+    .memory-chart-head span { color: var(--muted); font-variant-numeric: tabular-nums; }
+
+    .memory-chart svg {
+      display: block;
+      width: 100%;
+      height: 214px;
+      overflow: visible;
+      cursor: crosshair;
+      touch-action: pan-y;
+      font-family: var(--sans);
+    }
+
+    .memory-chart .chart-grid { stroke: var(--border); stroke-width: 1; }
+    .memory-chart .chart-axis { stroke: var(--faint); stroke-width: 1; }
+    .memory-chart .chart-cursor { stroke: var(--faint); stroke-width: 1; stroke-dasharray: 3 4; }
+    .memory-chart .chart-label { fill: var(--muted); font-size: 11px; }
+    .memory-chart .chart-bp-line { fill: none; stroke: var(--bp); stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; }
+    .memory-chart .chart-ffa-line { fill: none; stroke: var(--ffa); stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; }
+    .memory-chart .chart-bp-point { fill: #fff; stroke: var(--bp); stroke-width: 2.5; }
+    .memory-chart .chart-ffa-point { fill: var(--ffa); }
+    .memory-chart .chart-hover { pointer-events: none; }
+    .memory-chart .chart-hover-line { stroke: #475569; stroke-width: 1.5; stroke-dasharray: 4 4; }
+    .memory-chart .chart-hover-bp { fill: #fff; stroke: var(--bp); stroke-width: 2; }
+    .memory-chart .chart-hover-ffa { fill: #fff; stroke: var(--ffa); stroke-width: 2; }
+    .memory-chart .chart-hit { fill: transparent; cursor: crosshair; }
+
+    .memory-chart-hint {
+      margin: 5px 0 0;
+      color: var(--muted);
+      font-size: 11px;
+    }
+
+    .memory-legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px 17px;
+      color: var(--muted);
+      font-size: 11px;
+    }
+
+    .memory-legend span { display: inline-flex; align-items: center; gap: 5px; }
+    .memory-legend i { display: inline-block; width: 15px; height: 3px; border-radius: 2px; }
+    .memory-legend .bp-key { background: var(--bp); }
+    .memory-legend .ffa-key { background: var(--ffa); }
+    .memory-legend .updated-key { width: 11px; height: 11px; background: #dcf5eb; border: 1px solid var(--success); border-radius: 2px; }
+
+    .figure-caption {
+      max-width: 860px;
+      margin: 10px auto 0;
+      color: var(--muted);
+      font-size: 13px;
+      font-style: italic;
+      line-height: 1.55;
+      text-align: center;
+    }
+
+    .technical-details {
+      margin: 1.25em 0 1.8em;
+      overflow: hidden;
+      background: #fff;
+      border: 1px solid #ccd9ea;
+      border-radius: 8px;
+    }
+
+    .technical-details summary {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 11px 15px;
+      color: var(--primary-dark);
+      background: var(--primary-soft);
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 700;
+      list-style: none;
+    }
+
+    .technical-details summary::-webkit-details-marker { display: none; }
+    .technical-details summary > span { min-width: 0; }
+    .technical-details summary::after { content: "+"; flex: 0 0 auto; font: 18px/1 var(--sans); }
+    .technical-details[open] summary::after { content: "−"; }
+    .technical-details summary:focus-visible { outline: 2px solid var(--primary); outline-offset: -3px; }
+
+    .technical-details-body { padding: 16px 18px 17px; }
+    .technical-details-body > :last-child { margin-bottom: 0; }
+
+    .math-section + .math-section {
+      margin-top: 18px;
+      padding-top: 17px;
+      border-top: 1px solid var(--border);
+    }
+
+    .math-section h4 {
+      margin: 0 0 8px;
+      color: var(--ink);
+      font-family: var(--serif);
+      font-size: 17px;
+    }
+
+    .math-section p { margin-bottom: 0.8em; }
+
+    .forward-notation-figure {
+      margin: 1.15em 0 1.35em;
+      padding: 17px 16px 15px;
+      overflow-x: auto;
+      background: var(--soft);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+    }
+
+    .forward-chain {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 650px;
+      padding: 4px 0 14px;
+    }
+
+    .forward-node {
+      flex: 0 0 132px;
+      padding: 10px 9px;
+      color: var(--ink);
+      background: #fff;
+      border: 1px solid #cbd7e6;
+      border-radius: 7px;
+      box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
+      text-align: center;
+    }
+
+    .forward-node.input-node { border-color: #d8c3a3; background: #fffaf3; }
+    .forward-node.output-node { border-color: #b7cce4; background: var(--bp-soft); }
+
+    .forward-node span,
+    .forward-node small {
+      display: block;
+      color: var(--muted);
+      font-size: 10px;
+      line-height: 1.35;
+    }
+
+    .forward-node strong {
+      display: block;
+      margin: 2px 0;
+      font: 650 14px/1.45 var(--mono);
+    }
+
+    .forward-edge {
+      position: relative;
+      flex: 0 0 94px;
+      height: 58px;
+      color: var(--primary-dark);
+      text-align: center;
+    }
+
+    .forward-edge strong {
+      display: block;
+      font: 650 12px/1.35 var(--mono);
+    }
+
+    .forward-edge small {
+      display: block;
+      color: var(--muted);
+      font-size: 9px;
+    }
+
+    .forward-edge::before {
+      position: absolute;
+      right: 10px;
+      bottom: 8px;
+      left: 10px;
+      height: 2px;
+      content: "";
+      background: var(--primary);
+    }
+
+    .forward-edge::after {
+      position: absolute;
+      right: 7px;
+      bottom: 4px;
+      width: 0;
+      height: 0;
+      border-top: 5px solid transparent;
+      border-bottom: 5px solid transparent;
+      border-left: 7px solid var(--primary);
+      content: "";
+    }
+
+    .forward-legend {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+      min-width: 650px;
+      padding-top: 12px;
+      border-top: 1px solid var(--border);
+    }
+
+    .forward-legend p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 11px;
+      line-height: 1.5;
+    }
+
+    .forward-legend strong { color: var(--ink); font-family: var(--mono); }
+
+    .forward-notation-figure figcaption {
+      min-width: 650px;
+      margin-top: 10px;
+      color: var(--muted);
+      font-size: 11px;
+      font-style: italic;
+      text-align: center;
+    }
+
+    .moving-representation-figure {
+      margin: 1.45em 0 1.6em;
+      padding: 14px;
+      background: var(--soft);
+      border: 1px solid var(--border);
+      border-radius: 9px;
+    }
+
+    .moving-figure-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 12px;
+    }
+
+    .moving-panel {
+      min-width: 0;
+      padding: 13px;
+      background: #fff;
+      border: 1px solid #d7e0eb;
+      border-radius: 7px;
+    }
+
+    .moving-panel h4,
+    .moving-panel summary {
+      margin: 0 0 12px;
+      color: var(--ink);
+      font-family: var(--sans);
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    .moving-panel summary {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin: -13px;
+      padding: 13px;
+      cursor: pointer;
+      list-style: none;
+    }
+
+    .moving-panel summary::-webkit-details-marker { display: none; }
+    .moving-panel summary::after { content: "+"; font-size: 17px; line-height: 1; }
+    .moving-panel[open] summary { margin-bottom: 12px; border-bottom: 1px solid var(--border); }
+    .moving-panel[open] summary::after { content: "−"; }
+    .moving-panel summary:focus-visible { outline: 2px solid var(--primary); outline-offset: -3px; }
+
+    .moving-step {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 17px minmax(0, 1fr) 17px minmax(0, 1.12fr);
+      align-items: center;
+      gap: 3px;
+    }
+
+    .moving-node {
+      min-width: 0;
+      padding: 7px 4px;
+      color: var(--ink);
+      background: var(--softer);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      text-align: center;
+    }
+
+    .moving-node span,
+    .moving-node small {
+      display: block;
+      color: var(--muted);
+      font-size: 11px;
+      line-height: 1.3;
+    }
+
+    .moving-node strong {
+      display: block;
+      overflow: hidden;
+      color: var(--ink);
+      font: 650 11px/1.45 var(--mono);
+      text-overflow: ellipsis;
+    }
+
+    .moving-node.representation-node { background: var(--bp-soft); border-color: #bfd2e8; }
+    .moving-node.loss-node { background: var(--ffa-soft); border-color: #ecd0ad; }
+
+    .moving-process-arrow {
+      color: var(--faint);
+      font-size: 16px;
+      text-align: center;
+    }
+
+    .moving-panel-insight {
+      margin: 10px 0 0 !important;
+      color: var(--muted);
+      font-size: 11px;
+      line-height: 1.5;
+    }
+
+    .moving-landscape {
+      display: block;
+      width: 100%;
+      max-width: 420px;
+      height: auto;
+      margin: 0 auto;
+    }
+
+    .moving-landscape .old-contour { fill: none; stroke: var(--bp); stroke-dasharray: 4 4; }
+    .moving-landscape .new-contour { fill: none; stroke: var(--ffa); }
+    .moving-landscape .shift-line { fill: none; stroke: var(--ffa); stroke-width: 1.5; stroke-dasharray: 3 4; }
+    .moving-landscape .update-line { fill: none; stroke: var(--ink); stroke-width: 2; }
+    .moving-landscape .landscape-label { fill: var(--muted); font: 11px var(--sans); }
+    .moving-landscape .landscape-label-strong { fill: var(--ink); font: 600 11px var(--sans); }
+
+    .moving-representation-figure > figcaption {
+      margin-top: 10px;
+      color: var(--muted);
+      font-size: 12px;
+      font-style: italic;
+      line-height: 1.5;
+      text-align: center;
+    }
+
+    .scope-note {
+      margin-top: -0.9em;
+      padding: 0 4px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    mjx-container[display="true"] {
+      margin: 1.05em 0 !important;
+      overflow-x: auto;
+      overflow-y: hidden;
+      padding: 2px 0;
+    }
+
+    /* Static geometric figure */
+    .kernel-figure {
+      margin: 1.8em auto;
+      padding: 18px;
+      background: #fff;
+      border: 1px solid var(--border);
+      border-radius: 9px;
+    }
+
+    .kernel-figure svg {
+      display: block;
+      width: 100%;
+      height: auto;
+    }
+
+    /* Interactive experiment panels */
+    .experiment-panel {
+      width: 100%;
+      max-width: 100%;
+      margin: 1.7em 0 2.4em;
+      padding: 22px;
+      background: #fff;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      box-shadow: 0 2px 10px rgba(15, 23, 42, 0.05);
+    }
+
+    .experiment-header {
+      display: grid;
+      grid-template-columns: 1fr minmax(245px, 0.72fr);
+      align-items: end;
+      gap: 28px;
+      margin-bottom: 20px;
+    }
+
+    .experiment-title h3 {
+      margin: 0 0 5px;
+      color: var(--ink);
+      font-family: var(--sans);
+      font-size: 18px;
+    }
+
+    .experiment-title p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    .slider-label {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 7px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 650;
+    }
+
+    .slider-value {
+      color: var(--ink);
+      font-family: var(--mono);
+      font-size: 13px;
+    }
+
+    input[type="range"] {
+      width: 100%;
+      accent-color: var(--primary);
+      cursor: pointer;
+    }
+
+    .metric-strip {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1px;
+      overflow: hidden;
+      margin-bottom: 18px;
+      background: var(--border);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+    }
+
+    .metric {
+      padding: 11px 14px;
+      background: var(--softer);
+    }
+
+    .metric span {
+      display: block;
+      margin-bottom: 2px;
+      color: var(--muted);
+      font-size: 10px;
+      font-weight: 750;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .metric strong {
+      color: var(--ink);
+      font-family: var(--mono);
+      font-size: 16px;
+      font-weight: 650;
+    }
+
+    .network-viz {
+      overflow-x: auto;
+      margin: 0 0 20px;
+      padding: 16px 14px 14px;
+      background: var(--soft);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+    }
+
+    .network-viz-inner {
+      min-width: 560px;
+    }
+
+    .network-row-label {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 8px;
+      color: var(--muted);
+      font-size: 10px;
+      font-weight: 750;
+      letter-spacing: 0.07em;
+      text-transform: uppercase;
+    }
+
+    .network-layers {
+      position: relative;
+      display: grid;
+      grid-template-columns: repeat(var(--layers), minmax(28px, 1fr));
+      gap: 5px;
+      margin-bottom: 8px;
+    }
+
+    .network-objective-track {
+      display: grid;
+      grid-template-columns: repeat(var(--layers), minmax(28px, 1fr));
+      gap: 5px;
+      height: 20px;
+      margin-bottom: 4px;
+    }
+
+    .network-objective-dot {
+      position: relative;
+      justify-self: center;
+      width: 12px;
+      height: 12px;
+      border: 2px solid var(--ffa);
+      border-radius: 50%;
+      background: var(--ffa);
+    }
+
+    .network-objective-dot::after {
+      position: absolute;
+      top: 10px;
+      left: 3px;
+      width: 2px;
+      height: 14px;
+      content: "";
+      background: var(--ffa);
+    }
+
+    .network-objective-track.bp-objectives {
+      margin-top: 8px;
+    }
+
+    .bp-objectives .network-objective-dot {
+      border-color: var(--bp);
+      background: var(--bp);
+    }
+
+    .bp-objectives .network-objective-dot::after {
+      height: 22px;
+      background: var(--bp);
+    }
+
+    .bp-objectives + .bp-gradient { margin-top: 0; }
+
+    .network-layers::before {
+      position: absolute;
+      top: 50%;
+      right: 1%;
+      left: 1%;
+      height: 2px;
+      content: "";
+      background: #b9c7d9;
+    }
+
+    .network-layer {
+      position: relative;
+      z-index: 1;
+      display: grid;
+      place-items: center;
+      height: 38px;
+      color: #42526a;
+      background: #fff;
+      border: 1px solid #cbd5e1;
+      border-radius: 6px;
+      font-size: 10px;
+      font-weight: 700;
+    }
+
+    .forward-flow {
+      position: relative;
+      height: 17px;
+      margin: 0 2px 9px;
+    }
+
+    .forward-flow::before {
+      position: absolute;
+      top: 7px;
+      right: 7px;
+      left: 0;
+      height: 2px;
+      content: "";
+      background: linear-gradient(90deg, rgba(50, 117, 191, 0.32), var(--bp));
+    }
+
+    .forward-flow::after {
+      position: absolute;
+      top: 3px;
+      right: 0;
+      width: 0;
+      height: 0;
+      border-top: 5px solid transparent;
+      border-bottom: 5px solid transparent;
+      border-left: 7px solid var(--bp);
+      content: "";
+    }
+
+    .gradient-blocks {
+      display: grid;
+      grid-template-columns: repeat(var(--layers), minmax(28px, 1fr));
+      gap: 5px;
+    }
+
+    .gradient-block {
+      position: relative;
+      grid-column: span var(--span);
+      min-width: 0;
+      height: 40px;
+      padding: 4px 7px;
+      color: #995515;
+      background: var(--ffa-soft);
+      border: 1px solid #f1cfab;
+      border-radius: 6px;
+      font-size: 9px;
+      font-weight: 700;
+      line-height: 16px;
+      text-align: center;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .gradient-block::before {
+      position: absolute;
+      top: 29px;
+      right: 8px;
+      left: 14px;
+      height: 2px;
+      content: "";
+      background: rgba(216, 120, 34, 0.56);
+    }
+
+    .gradient-block::after {
+      position: absolute;
+      top: 25px;
+      left: 7px;
+      width: 0;
+      height: 0;
+      border-top: 5px solid transparent;
+      border-bottom: 5px solid transparent;
+      border-right: 7px solid var(--ffa);
+      content: "";
+    }
+
+    .gradient-block span {
+      position: relative;
+      z-index: 1;
+      display: block;
+      overflow: hidden;
+      padding: 0 4px;
+      background: var(--ffa-soft);
+      text-overflow: ellipsis;
+    }
+
+    .bp-gradient {
+      position: relative;
+      height: 29px;
+      margin-top: 8px;
+      padding-top: 13px;
+      color: var(--primary-dark);
+      font-size: 9px;
+      font-weight: 700;
+      text-align: center;
+    }
+
+    .bp-gradient::before {
+      position: absolute;
+      top: 8px;
+      right: 2px;
+      left: 9px;
+      height: 2px;
+      content: "";
+      background: linear-gradient(270deg, rgba(50, 117, 191, 0.32), var(--bp));
+    }
+
+    .bp-gradient::after {
+      position: absolute;
+      top: 4px;
+      left: 2px;
+      width: 0;
+      height: 0;
+      border-top: 5px solid transparent;
+      border-bottom: 5px solid transparent;
+      border-right: 7px solid var(--bp);
+      content: "";
+    }
+
+    .table-scroll {
+      width: 100%;
+      overflow-x: auto;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: #fff;
+      font-size: 12px;
+      font-variant-numeric: tabular-nums;
+    }
+
+    th, td {
+      padding: 8px 10px;
+      border-bottom: 1px solid var(--border);
+      text-align: right;
+      white-space: nowrap;
+    }
+
+    th:first-child, td:first-child { text-align: left; }
+
+    th {
+      color: var(--muted);
+      background: var(--softer);
+      font-size: 10px;
+      font-weight: 750;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+    }
+
+    tbody tr:last-child td { border-bottom: 0; }
+
+    tbody tr.active-row td {
+      color: var(--ink);
+      background: var(--primary-soft);
+      font-weight: 650;
+    }
+
+    tbody tr.bp-row td {
+      color: var(--primary-dark);
+      border-top: 1px solid #cbd9ec;
+    }
+
+    .interaction-note {
+      margin: 9px 0 0 !important;
+      color: var(--muted);
+      font-size: 12px;
+      font-style: italic;
+    }
+
+    .experiment-takeaway {
+      margin: -8px 0 18px !important;
+      padding: 10px 13px;
+      color: var(--text);
+      background: var(--primary-soft);
+      border-left: 3px solid var(--primary);
+      border-radius: 0 6px 6px 0;
+      font-size: 13px;
+      line-height: 1.55;
+    }
+
+    .experiment-takeaway strong { color: var(--primary-dark); }
+
+    .spectral-viz {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+
+    .spectral-viz-card {
+      min-width: 0;
+      padding: 13px 14px 11px;
+      background: var(--soft);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+    }
+
+    .spectral-viz-head {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 3px 10px;
+      color: var(--ink);
+      font-size: 12px;
+    }
+
+    .spectral-viz-head output {
+      color: var(--ffa);
+      font-family: var(--mono);
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .spectral-viz svg {
+      display: block;
+      width: 100%;
+      height: auto;
+      font-family: var(--sans);
+    }
+
+    .spectral-viz-card p {
+      margin: 4px 0 0;
+      color: var(--muted);
+      font-size: 11px;
+      line-height: 1.45;
+    }
+
+    .spectral-viz-note {
+      margin: -12px 0 18px !important;
+      color: var(--muted);
+      font-size: 11px;
+      line-height: 1.5;
+    }
+
+    .bibtex-wrap {
+      position: relative;
+      margin: 1.4em 0;
+    }
+
+    .bibtex-block {
+      margin: 0;
+      padding: 20px 22px 24px;
+      overflow-x: auto;
+      color: #1f2937;
+      background: var(--softer);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      font: 13px/1.65 var(--mono);
+      white-space: pre-wrap;
+    }
+
+    .copy-button {
+      position: absolute;
+      top: 9px;
+      right: 9px;
+      z-index: 1;
+      padding: 5px 9px;
+      color: var(--muted);
+      background: #fff;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 11px;
+    }
+
+    .copy-button:hover { color: var(--ink); }
+
+    .footer {
+      padding: 28px 20px;
+      color: var(--muted);
+      background: var(--softer);
+      border-top: 1px solid var(--border);
+      font-size: 12px;
+      text-align: center;
+    }
+
+    .footer p { margin: 0; }
+
+    @media (max-width: 980px) {
+      .project-wrap {
+        grid-template-columns: 1fr;
+        gap: 0;
+        padding: 24px 18px 70px;
+      }
+      .project-toc { display: none; }
+      .project-content { max-width: 760px; }
+      .comparison-figure,
+      .experiment-panel { width: 100%; }
+    }
+
+    @media (max-width: 820px) {
+      .comparison-grid { grid-template-columns: 1fr; }
+    }
+
+    @media (max-width: 680px) {
+      .masthead-inner { width: calc(100% - 28px); }
+      .masthead-links a:first-child { display: none; }
+      .project-hero { padding-top: 7px; }
+      .project-title { font-size: 2.05rem; }
+      .project-subtitle { font-size: 16px; }
+      .project-content h2 { font-size: 25px; }
+      .animation-panel { padding: 17px 14px 14px; }
+      .experiment-panel { padding: 16px; }
+      .experiment-header { grid-template-columns: 1fr; gap: 15px; }
+      .metric-strip { grid-template-columns: 1fr; }
+      .spectral-viz { grid-template-columns: 1fr; }
+      .metric { display: flex; align-items: baseline; justify-content: space-between; }
+      .metric span { margin: 0; }
+      .gap-comparison-head,
+      .gap-summary { align-items: flex-start; flex-direction: column; gap: 4px; }
+      .gap-row { grid-template-columns: 88px minmax(0, 1fr) 68px; }
+      .design-list { grid-template-columns: 1fr; }
+      .moving-figure-grid { grid-template-columns: 1fr; }
+      .ffa-example-grid { grid-template-columns: 1fr; }
+      .ffa-example { padding: 15px; }
+      .project-button { font-size: 13px; }
+      .button-label { padding: 8px 11px; }
+    }
+
+    @media (max-width: 460px) {
+      .moving-step { grid-template-columns: 1fr; gap: 5px; }
+      .moving-process-arrow { line-height: 1; transform: rotate(90deg); }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      html { scroll-behavior: auto; }
+      *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="masthead">
+    <div class="masthead-inner">
+      <a class="site-name" href="#top">FFA Theory</a>
+      <nav class="masthead-links" aria-label="Site navigation">
+        <a href="#empirical-evidence">Experiments</a>
+        <a href="#two-failure-modes">Theory</a>
+        <a href="#design-lessons">Design lessons</a>
+        <a href="https://github.com/Zhaoxian-Wu/ffa-theory" target="_blank" rel="noreferrer">GitHub ↗</a>
+      </nav>
+    </div>
+  </header>
+
+  <div class="project-wrap" id="top">
+    <aside class="project-toc" aria-label="Table of contents">
+      <div class="project-toc-sticky">
+        <div class="project-toc-label">Contents</div>
+        <nav class="project-toc-nav" id="project-toc-nav"></nav>
+      </div>
+    </aside>
+
+    <main class="project-main" id="main">
+      <header class="project-hero">
+        <h1 class="project-title">The Price of Locality:<br>Why Forward-Forward Underperforms Backpropagation?</h1>
+        <p class="project-subtitle">
+          A convergence and representation theory for understanding the performance gap between local learning and globally coordinated optimization.
+        </p>
+        <div class="project-authors">
+          <a href="https://zhaoxian-wu.github.io/" target="_blank" rel="noreferrer">Zhaoxian Wu</a><span class="author-sep">,</span>
+          <a href="https://haichuan.pages.dev/" target="_blank" rel="noreferrer">Haichuan Liu</a><span class="author-sep">,</span>
+          <a href="https://chen.tech.cornell.edu/" target="_blank" rel="noreferrer">Tianyi Chen</a>
+        </div>
+        <div class="project-affiliation">Cornell Tech · Cornell University</div>
+        <div class="project-venue">NeurIPS 2026 · Poster</div>
+
+        <div class="project-links">
+          <a class="project-button" href="https://github.com/Zhaoxian-Wu/ffa-theory" target="_blank" rel="noreferrer">
+            <span class="button-icon" aria-hidden="true"><svg viewBox="0 0 16 16" focusable="false"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82A7.65 7.65 0 0 1 8 4.73c.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg></span><span class="button-label">Code</span>
+          </a>
+          <a class="project-button" href="https://arxiv.org/html/2609.33240v1" target="_blank" rel="noreferrer">
+            <span class="button-icon" aria-hidden="true">↗</span><span class="button-label">arXiv</span>
+          </a>
+          <a class="project-button" href="#bibtex">
+            <span class="button-icon" aria-hidden="true">❝</span><span class="button-label">BibTeX</span>
+          </a>
+        </div>
+      </header>
+
+      <article class="project-content">
+        <p class="ffa-origin">Geoffrey Hinton introduced the Forward-Forward Algorithm in 2022: it trains each layer through positive and negative forward passes with local objectives (<a href="https://arxiv.org/abs/2212.13345" target="_blank" rel="noreferrer">original paper</a>).</p>
+        <div class="tldr">
+          <h2 id="tldr">TL;DR</h2>
+          <ul>
+            <li><strong>FFA underperforms BP.</strong> The performance gap persists across vision and language tasks and becomes more pronounced as task difficulty and model scale increase.</li>
+            <li><strong>Failure mode 1: learning from shifting representations.</strong> Although one FFA block can be easy to optimize in isolation, earlier blocks keep changing the features received by later blocks during concurrent training.</li>
+            <li><strong>Failure mode 2: representation collapse.</strong> Under the analyzed kernel-product conditions, representation kernels contract toward rank one with depth. For the collapsed-goodness-gradient subclass, local error signals then become increasingly redundant.</li>
+            <li><strong>Design insight: preserve task-relevant directions.</strong> Local label readouts (LCE) give each block direct task supervision; spectral flattening spreads weight updates across more directions. Both narrow the measured gap to BP.</li>
+          </ul>
+        </div>
+
+        <h2 id="bp-vs-ffa">BP versus FFA</h2>
+        <p>
+          Backpropagation and Forward-Forward use the same forward computation but organize learning signals in fundamentally different ways. BP waits for the task loss, then transports one coordinated signal through the full chain rule. FFA attaches an independent contrastive objective to every layer and updates each block without gradients crossing layer boundaries.
+        </p>
+
+        <figure class="comparison-figure">
+          <div class="comparison-grid">
+            <section class="animation-panel bp-panel" id="bp-flow" aria-label="Backpropagation activation lifetime">
+              <div class="animation-head">
+                <h3>Backpropagation</h3>
+                <span>one task loss<br>one global backward path</span>
+              </div>
+              <div class="animated-network">
+                <p class="flow-direction">Forward → store · backward ← release</p>
+                <div class="objective-track" aria-hidden="true">
+                  <span class="objective-node" style="grid-column: 6"></span>
+                </div>
+                <div class="layer-track">
+                  <button type="button" class="anim-layer" data-layer="1">L1</button><button type="button" class="anim-layer" data-layer="2">L2</button><button type="button" class="anim-layer" data-layer="3">L3</button>
+                  <button type="button" class="anim-layer" data-layer="4">L4</button><button type="button" class="anim-layer" data-layer="5">L5</button><button type="button" class="anim-layer" data-layer="6">L6</button>
+                </div>
+                <div class="flow-status"><span class="flow-message">Forward through L1; keep its activation for backward.</span><strong class="memory-count">1 / 6 stored</strong></div>
+              </div>
+            </section>
+
+            <section class="animation-panel ffa-panel" id="ffa-flow" aria-label="Forward-Forward activation lifetime">
+              <div class="animation-head">
+                <h3>Forward-Forward</h3>
+                <span>one objective per layer<br>no global backward path</span>
+              </div>
+              <div class="animated-network">
+                <p class="flow-direction">Positive / negative passes → local supervision</p>
+                <div class="objective-track" aria-hidden="true">
+                  <span class="objective-node"></span><span class="objective-node"></span><span class="objective-node"></span>
+                  <span class="objective-node"></span><span class="objective-node"></span><span class="objective-node"></span>
+                </div>
+                <div class="layer-track">
+                  <button type="button" class="anim-layer" data-layer="1">L1</button><button type="button" class="anim-layer" data-layer="2">L2</button><button type="button" class="anim-layer" data-layer="3">L3</button>
+                  <button type="button" class="anim-layer" data-layer="4">L4</button><button type="button" class="anim-layer" data-layer="5">L5</button><button type="button" class="anim-layer" data-layer="6">L6</button>
+                </div>
+                <div class="flow-status"><span class="flow-message">L1 receives local supervision using one reusable buffer.</span><strong class="memory-count">1 buffer in use</strong></div>
+              </div>
+            </section>
+          </div>
+          <div class="comparison-controls">
+            <p>Gray with a bar means activation is stored; green ✓ means updated. Hover or focus a layer to inspect it.</p>
+            <button type="button" id="flow-toggle">Pause</button>
+            <button type="button" id="flow-step">Next step</button>
+          </div>
+          <div class="memory-chart" id="memory-chart" role="group" tabindex="0" aria-label="Memory chart step selection" aria-describedby="memory-chart-hint" hidden>
+            <div class="memory-chart-head">
+              <strong>Peak activation-buffer capacity during one pass</strong>
+              <span id="memory-reading">Step 1/12 · BP peak 1 · FFA 1 buffers</span>
+            </div>
+            <svg id="memory-plot" role="img" aria-labelledby="memory-plot-title memory-plot-desc"></svg>
+            <div class="memory-legend" aria-hidden="true">
+              <span><i class="bp-key"></i>BP</span>
+              <span><i class="ffa-key"></i>FFA</span>
+              <span><i class="updated-key"></i>Updated layer</span>
+            </div>
+            <p class="memory-chart-hint" id="memory-chart-hint">Hover to preview a step; click the plot or a numbered tick to select it. Use ← or → when focused.</p>
+          </div>
+          <figcaption class="figure-caption">
+            The animation illustrates when BP stores and releases activations and when FFA applies local updates. The buffer labels are schematic layer-buffer units, not measured GPU bytes; parameters, optimizer state, and temporary workspaces are excluded.
+          </figcaption>
+        </figure>
+
+        <div class="ffa-example">
+          <h3>One cat image, two FFA passes</h3>
+          <p class="ffa-example-intro">This supervised CIFAR-10 example uses two forward passes: <strong>cat photo + “cat” label</strong> is positive, and <strong>the same cat photo + “truck” label</strong> is negative. Here “negative” means an incorrect image–label pair, not a photograph of a truck. The photos and three-layer flow are illustrative, not actual CIFAR-10 samples or measured scores.</p>
+          <div class="ffa-example-grid">
+            <div class="ffa-example-path positive">
+              <strong>Positive pass · correct label</strong>
+              <div class="ffa-input-pair">
+                <img src="assets/cat.jpg" alt="Orange cat photograph used as the input image" width="1600" height="1200">
+                <span class="ffa-pair-plus" aria-hidden="true">+</span>
+                <span class="ffa-label-token">CAT label</span>
+              </div>
+              <p class="ffa-pair-caption">Same cat image + encoded “cat” label overlay → forward through the layers</p>
+              <div class="ffa-layer-flow" aria-label="Each layer raises its local goodness for the positive input">
+                <span>L1: goodness ↑</span><span>L2: goodness ↑</span><span>L3: goodness ↑</span>
+              </div>
+              <p>This pass contributes a loss that pushes each layer's goodness above its threshold.</p>
+            </div>
+            <div class="ffa-example-path negative">
+              <strong>Negative pass · wrong label</strong>
+              <div class="ffa-input-pair">
+                <img src="assets/cat.jpg" alt="The same orange cat photograph used in the positive pass" width="1600" height="1200">
+                <span class="ffa-pair-plus" aria-hidden="true">+</span>
+                <span class="ffa-label-token">TRUCK label</span>
+              </div>
+              <p class="ffa-pair-caption">Same cat image + encoded “truck” label overlay → forward through the layers</p>
+              <div class="ffa-class-cue">
+                <img src="assets/truck.jpg" alt="Truck photo used only to illustrate the wrong class name" width="1280" height="960" loading="lazy">
+                <span>Class cue only. A truck photo with the true label “truck” would be positive in its own example.</span>
+              </div>
+              <div class="ffa-layer-flow" aria-label="Each layer lowers its local goodness for the negative input">
+                <span>L1: goodness ↓</span><span>L2: goodness ↓</span><span>L3: goodness ↓</span>
+              </div>
+              <p>This pass contributes a loss that pushes each layer's goodness below its threshold.</p>
+            </div>
+          </div>
+          <div class="ffa-example-source">
+            <p>Photos: <a href="https://commons.wikimedia.org/wiki/File:Domestic_Cat.jpg" target="_blank" rel="noreferrer">cat by Halved sandwich</a> and <a href="https://commons.wikimedia.org/wiki/File:Small_Isuzu_truck,_side_view.JPG" target="_blank" rel="noreferrer">truck by Mattes</a> (public domain).</p>
+          </div>
+        </div>
+
+        <details class="technical-details">
+          <summary>Technical detail: formulations of BP and FFA</summary>
+          <div class="technical-details-body">
+            <div class="math-section">
+              <h4>Forward inference</h4>
+              <p>
+                Let $x_i\in\mathbb R^{d^{(0)}}$ be sample $i$ and set its input representation to $h_i^{(0)}=x_i$. Suppressing the training-iteration index, the scaled residual network computes
+                $$h_i^{(\ell)}=h_i^{(\ell-1)}
+                +\frac{1}{L}\phi\!\left(
+                \operatorname{LN}\!\left(W^{(\ell)}h_i^{(\ell-1)}\right)
+                \right),
+                \quad \ell=1,\ldots,L.$$
+                Thus $W^{(\ell)}\in\mathbb R^{d^{(\ell)}\times d^{(\ell-1)}}$ contains the trainable parameters of block $\ell$, while $h_i^{(\ell)}$ is the representation of the same sample after that block.
+              </p>
+
+              <figure class="forward-notation-figure" role="img" aria-label="A sample x i becomes its input representation h i zero, passes through earlier blocks, enters block ell as h i ell minus one, and is transformed using W ell into h i ell.">
+                <div class="forward-chain" aria-hidden="true">
+                  <div class="forward-node input-node">
+                    <span>sample $i$</span>
+                    <strong>$x_i=h_i^{(0)}$</strong>
+                    <small>raw input</small>
+                  </div>
+                  <div class="forward-edge">
+                    <strong>$W^{(1)},\ldots,W^{(\ell-1)}$</strong>
+                    <small>earlier blocks</small>
+                  </div>
+                  <div class="forward-node">
+                    <span>block $\ell$ receives</span>
+                    <strong>$h_i^{(\ell-1)}$</strong>
+                    <small>incoming representation</small>
+                  </div>
+                  <div class="forward-edge">
+                    <strong>$W^{(\ell)}$</strong>
+                    <small>current block</small>
+                  </div>
+                  <div class="forward-node output-node">
+                    <span>block $\ell$ produces</span>
+                    <strong>$h_i^{(\ell)}$</strong>
+                    <small>updated representation</small>
+                  </div>
+                </div>
+                <div class="forward-legend">
+                  <p><strong>$x_i$</strong> is one input example; different values of $i$ denote different samples.</p>
+                  <p><strong>$W^{(\ell)}$</strong> is shared across samples and transforms the incoming features at layer $\ell$.</p>
+                  <p><strong>$h_i^{(\ell)}$</strong> is what the network represents about sample $i$ after layer $\ell$.</p>
+                </div>
+                <figcaption>The subscript $i$ follows a sample; the superscript $(\ell)$ follows depth.</figcaption>
+              </figure>
+
+              <p>
+                At training iteration $k$, we write these quantities as $W_k^{(\ell)}$ and $h_k^{(\ell)}(x_i)$. Stacking the representations of all $N$ samples row by row gives
+              $$H_k^{(\ell)}
+              =\begin{bmatrix}
+              h_k^{(\ell)}(x_1)^\top\\[-2pt]
+              \vdots\\[-2pt]
+              h_k^{(\ell)}(x_N)^\top
+              \end{bmatrix}\in\mathbb R^{N\times d^{(\ell)}}$$
+                and $W_k=(W_k^{(1)},\ldots,W_k^{(L)})$ denotes the full network.
+              </p>
+            </div>
+
+            <div class="math-section">
+              <h4>Backpropagation</h4>
+              <p>Every layer differentiates the same end-to-end task loss:</p>
+              $$g_{k,\mathrm{BP}}^{(\ell)}
+              =\nabla_{W^{(\ell)}}\mathcal L_{\mathrm{task}}(W_k),
+              \qquad
+              W_{k+1}^{(\ell)}
+              =W_k^{(\ell)}-\eta g_{k,\mathrm{BP}}^{(\ell)}.$$
+              <p>The chain rule lets the final task error coordinate the updates of all layers.</p>
+            </div>
+
+            <div class="math-section">
+              <h4>Forward-Forward</h4>
+              <p>Block $\ell$ differentiates only its own local loss and treats the incoming representation $H_k^{(\ell-1)}$ as fixed:</p>
+              $$g_{k,\mathrm{FFA}}^{(\ell)}
+              =\nabla_{W^{(\ell)}}\mathcal L^{(\ell)}
+              \bigl(W_k^{(\ell)};\operatorname{stopgrad}(H_k^{(\ell-1)})\bigr),
+              \qquad
+              W_{k+1}^{(\ell)}
+              =W_k^{(\ell)}-\eta^{(\ell)}g_{k,\mathrm{FFA}}^{(\ell)}.$$
+              <p>No task gradient crosses a block boundary, so these updates are not gradient steps on one shared global objective.</p>
+            </div>
+          </div>
+        </details>
+
+        <h2 id="empirical-evidence">FFA underperforms BP</h2>
+        <p>
+          The starting point of this work is empirical: FFA remains substantially less accurate than BP even when both are trained on the same fixed backbone and dataset. In the strictly local endpoint of our CNN12/CIFAR-10 intervention, the gap is 32.65 percentage points.
+        </p>
+        <div class="gap-comparison" role="img" aria-label="On the fixed CNN12 CIFAR-10 experiment, strictly local FFA reaches 53.02 percent accuracy and BP reaches 85.67 percent, a gap of 32.65 percentage points.">
+          <div class="gap-comparison-head">
+            <strong>CNN12 on CIFAR-10</strong>
+            <span>Same backbone and dataset · mean over three seeds</span>
+          </div>
+          <div class="gap-row ffa">
+            <span class="gap-row-label">FFA</span>
+            <span class="gap-track" aria-hidden="true"><span class="gap-bar" style="--value:53.02%"></span></span>
+            <span class="gap-value">53.02%</span>
+          </div>
+          <div class="gap-row bp">
+            <span class="gap-row-label">BP</span>
+            <span class="gap-track" aria-hidden="true"><span class="gap-bar" style="--value:85.67%"></span></span>
+            <span class="gap-value">85.67%</span>
+          </div>
+          <div class="gap-summary">
+            <span>BP − FFA accuracy</span>
+            <strong>32.65 pp</strong>
+          </div>
+        </div>
+
+        <div class="callout">
+          <p><strong>Central question.</strong> What mechanisms cause FFA to underperform backpropagation?</p>
+        </div>
+        <p>
+          We answer this question by identifying two distinct but coupled failure modes: concurrent optimization on shifting representations and geometric representation collapse. The later experiments test how the gap changes with locality, model scale, and update geometry.
+        </p>
+
+        <h2 id="two-failure-modes">Two coupled failure modes</h2>
+
+        <h3 id="optimization-floor">1. Learning from a moving representation</h3>
+        <p>
+          Each FFA block receives its inputs from the blocks before it. Because all blocks train at the same time, those inputs change whenever an earlier block updates. A downstream block can reduce its local loss for the current representation, only to receive a different representation at the next step. Thus, every block may make local progress without the network following one coordinated descent direction.
+        </p>
+
+        <figure class="moving-representation-figure">
+          <div class="moving-figure-grid">
+            <details class="moving-panel">
+              <summary id="moving-input-title">Why the downstream target moves</summary>
+              <div class="moving-step">
+                <div class="moving-node">
+                  <span>earlier layers update</span>
+                  <strong>$W_k^{(&lt;\ell)}\to W_{k+1}^{(&lt;\ell)}$</strong>
+                  <small>upstream network changes</small>
+                </div>
+                <span class="moving-process-arrow" aria-hidden="true">→</span>
+                <div class="moving-node representation-node">
+                  <span>layer $\ell$ sees new features</span>
+                  <strong>$H_k^{(\ell-1)}\to H_{k+1}^{(\ell-1)}$</strong>
+                  <small>its input has moved</small>
+                </div>
+                <span class="moving-process-arrow" aria-hidden="true">→</span>
+                <div class="moving-node loss-node">
+                  <span>its local loss changes</span>
+                  <strong>$\mathcal L_k^{(\ell)}\to\mathcal L_{k+1}^{(\ell)}$</strong>
+                  <small>the target has moved</small>
+                </div>
+              </div>
+              <p class="moving-panel-insight">Because $\mathcal L_k^{(\ell)}(W)=\mathcal L^{(\ell)}(W;H_k^{(\ell-1)})$, layer $\ell$ is not repeatedly descending one fixed loss: every upstream update changes the loss it sees.</p>
+            </details>
+
+            <section class="moving-panel" aria-labelledby="moving-optimum-title">
+              <h4 id="moving-optimum-title">What this does to one local update</h4>
+              <svg class="moving-landscape" viewBox="0 0 330 205" role="img" aria-labelledby="moving-landscape-title moving-landscape-desc">
+                <title id="moving-landscape-title">A local objective whose optimum moves between iterations</title>
+                <desc id="moving-landscape-desc">The downstream update moves toward the old local optimum, but an upstream representation change shifts the loss contours and their optimum to a new location.</desc>
+
+                <ellipse class="old-contour" cx="112" cy="96" rx="72" ry="54" opacity="0.35"/>
+                <ellipse class="old-contour" cx="112" cy="96" rx="48" ry="35" opacity="0.55"/>
+                <ellipse class="old-contour" cx="112" cy="96" rx="24" ry="17" opacity="0.8"/>
+
+                <ellipse class="new-contour" cx="238" cy="82" rx="72" ry="54" opacity="0.28"/>
+                <ellipse class="new-contour" cx="238" cy="82" rx="48" ry="35" opacity="0.48"/>
+                <ellipse class="new-contour" cx="238" cy="82" rx="24" ry="17" opacity="0.72"/>
+
+                <path class="shift-line" d="M124 95 C160 75 190 75 224 82"/>
+                <path d="M224 82 l-8 -4 l2 9 z" fill="#d87822"/>
+
+                <circle cx="41" cy="166" r="5" fill="#0f172a"/>
+                <path class="update-line" d="M47 162 L96 112"/>
+                <path d="M96 112 l-3 9 l-6 -6 z" fill="#0f172a"/>
+                <circle cx="99" cy="109" r="5" fill="#0f172a"/>
+
+                <path d="M112 89 l7 7 l-7 7 l-7 -7 z" fill="#3275bf"/>
+                <path d="M238 75 l7 7 l-7 7 l-7 -7 z" fill="#d87822"/>
+
+                <text class="landscape-label-strong" x="18" y="184">Wₖ at layer ℓ</text>
+                <text class="landscape-label" x="114" y="184">update using the old loss</text>
+                <text class="landscape-label" x="51" y="25">old contours</text>
+                <text class="landscape-label" x="232" y="20">new contours</text>
+                <text class="landscape-label" x="70" y="78">old optimum</text>
+                <text class="landscape-label" x="223" y="104">new optimum</text>
+              </svg>
+              <p class="moving-panel-insight">The gradient can be a valid descent direction for $\mathcal L_k^{(\ell)}$ without being aligned with the shifted objective $\mathcal L_{k+1}^{(\ell)}$.</p>
+            </section>
+          </div>
+          <figcaption>FFA's local step and the upstream feature update are each reasonable in isolation; their simultaneous coupling makes the downstream objective move between steps.</figcaption>
+        </figure>
+
+        <p>
+          The multi-layer theorem captures this interference through a linearly decaying optimization term plus a coupling residual.
+        </p>
+
+        <details class="technical-details">
+          <summary>Key theorem: multi-layer FFA convergence with coupling residual</summary>
+          <div class="technical-details-body">
+            <p>
+              Inside the paper's local regularity regime, each isolated block satisfies a PL inequality. For concurrent training, define the average local suboptimality
+              $$V_k=\frac{1}{L}\sum_{\ell=1}^{L}
+              \left(\mathcal L_k^{(\ell)}-\mathcal L^{(\ell)*}\right).$$
+              Under the boundedness, smoothness, Gram-conditioning, sensitivity, scaled-residual, and step-size conditions stated in the paper,
+              $$V_k\le
+              \left(1-\frac{\eta\mu_{\min}}{2}\right)^kV_0
+              +O\!\left(\frac{e^{2\rho}\beta_{\max}}{\mu_{\min}^2}\right).$$
+              The first term is the progress inherited from the local PL geometry. The second controls interference caused by simultaneous changes in upstream representations.
+            </p>
+          </div>
+        </details>
+
+        <h3 id="representation-collapse">2. Geometric representation collapse</h3>
+        <h4>Representations become alike</h4>
+        <p>
+          One intuition is that each forward block can slightly reduce differences between samples' feature directions. Repeating such blocks can accumulate these small reductions, making initially distinct representations increasingly alike. Consequently, the local goodness gradients become increasingly redundant, and the network loses its ability to distinguish between classes.
+        </p>
+        <p>
+          Imagine comparing every pair of training images after each layer.
+          Let $h_i^{(\ell)}$ be the representation (a.k.a. activation or feature) of sample $i$ after layer $\ell$, and let $\widetilde h_i^{(\ell)}=\operatorname{LN}(h_i^{(\ell)})$ be its normalized version.
+          The representation kernel $\Sigma^{(\ell)}$ is the resulting $N\times N$ similarity table: entry $(i,j)$ compares images $i$ and $j$ at depth $\ell$. Using the representation matrix $H^{(\ell)}$ defined above (with the iteration index suppressed),  Then
+          $$[\Sigma^{(\ell)}]_{ij}
+          =\frac{\langle\widetilde h_i^{(\ell)},\widetilde h_j^{(\ell)}\rangle}{d},
+          \qquad \Sigma^{(\ell)}\in\mathbb R^{N\times N}.$$
+          Intuitively, $\Sigma^{(\ell)}$ can evaluate how similar the network's representations are for different samples. In the extreme case, if all normalized representations point in the same direction, $\Sigma^{(\ell)}$ becomes the all-ones matrix $J_N$.
+          The paper shows that this stronger contraction can happens when the specified kernel-product conditions hold.
+          At that time, it becomes hard to distinguish between samples.
+        </p>
+
+        <figure class="kernel-figure">
+          <svg viewBox="0 0 720 245" role="img" aria-labelledby="kernel-title kernel-desc">
+            <title id="kernel-title">Representation kernel contraction across depth</title>
+            <desc id="kernel-desc">A diverse similarity matrix progressively becomes an approximately uniform rank-one matrix as network depth increases.</desc>
+            <g transform="translate(34 41)">
+              <text x="61" y="-14" text-anchor="middle" fill="#475569" font-size="13" font-weight="700">shallow</text>
+              <g>
+                <rect width="122" height="122" rx="5" fill="#f8fafc" stroke="#dbe3ee"/>
+                <g fill="#4485c7">
+                  <rect x="8" y="8" width="18" height="18" rx="2" opacity=".95"/><rect x="30" y="8" width="18" height="18" rx="2" opacity=".22"/><rect x="52" y="8" width="18" height="18" rx="2" opacity=".48"/><rect x="74" y="8" width="18" height="18" rx="2" opacity=".14"/><rect x="96" y="8" width="18" height="18" rx="2" opacity=".32"/>
+                  <rect x="8" y="30" width="18" height="18" rx="2" opacity=".22"/><rect x="30" y="30" width="18" height="18" rx="2" opacity=".91"/><rect x="52" y="30" width="18" height="18" rx="2" opacity=".18"/><rect x="74" y="30" width="18" height="18" rx="2" opacity=".68"/><rect x="96" y="30" width="18" height="18" rx="2" opacity=".26"/>
+                  <rect x="8" y="52" width="18" height="18" rx="2" opacity=".48"/><rect x="30" y="52" width="18" height="18" rx="2" opacity=".18"/><rect x="52" y="52" width="18" height="18" rx="2" opacity=".96"/><rect x="74" y="52" width="18" height="18" rx="2" opacity=".25"/><rect x="96" y="52" width="18" height="18" rx="2" opacity=".74"/>
+                  <rect x="8" y="74" width="18" height="18" rx="2" opacity=".14"/><rect x="30" y="74" width="18" height="18" rx="2" opacity=".68"/><rect x="52" y="74" width="18" height="18" rx="2" opacity=".25"/><rect x="74" y="74" width="18" height="18" rx="2" opacity=".92"/><rect x="96" y="74" width="18" height="18" rx="2" opacity=".38"/>
+                  <rect x="8" y="96" width="18" height="18" rx="2" opacity=".32"/><rect x="30" y="96" width="18" height="18" rx="2" opacity=".26"/><rect x="52" y="96" width="18" height="18" rx="2" opacity=".74"/><rect x="74" y="96" width="18" height="18" rx="2" opacity=".38"/><rect x="96" y="96" width="18" height="18" rx="2" opacity=".95"/>
+                </g>
+              </g>
+              <text x="61" y="147" text-anchor="middle" fill="#64748b" font-size="12">diverse similarities</text>
+            </g>
+            <path d="M183 101 H309" fill="none" stroke="#7c3aed" stroke-width="3" stroke-linecap="round"/>
+            <path d="M309 101 l-10 -6 v12 z" fill="#7c3aed"/>
+            <text x="247" y="85" text-anchor="middle" fill="#64748b" font-size="12" font-weight="700">depth</text>
+            <g transform="translate(320 41)">
+              <text x="61" y="-14" text-anchor="middle" fill="#475569" font-size="13" font-weight="700">deeper</text>
+              <rect width="122" height="122" rx="5" fill="#f8fafc" stroke="#dbe3ee"/>
+              <g fill="#6255bd">
+                <rect x="8" y="8" width="18" height="18" rx="2" opacity=".85"/><rect x="30" y="8" width="18" height="18" rx="2" opacity=".64"/><rect x="52" y="8" width="18" height="18" rx="2" opacity=".72"/><rect x="74" y="8" width="18" height="18" rx="2" opacity=".58"/><rect x="96" y="8" width="18" height="18" rx="2" opacity=".68"/>
+                <rect x="8" y="30" width="18" height="18" rx="2" opacity=".64"/><rect x="30" y="30" width="18" height="18" rx="2" opacity=".86"/><rect x="52" y="30" width="18" height="18" rx="2" opacity=".62"/><rect x="74" y="30" width="18" height="18" rx="2" opacity=".78"/><rect x="96" y="30" width="18" height="18" rx="2" opacity=".65"/>
+                <rect x="8" y="52" width="18" height="18" rx="2" opacity=".72"/><rect x="30" y="52" width="18" height="18" rx="2" opacity=".62"/><rect x="52" y="52" width="18" height="18" rx="2" opacity=".88"/><rect x="74" y="52" width="18" height="18" rx="2" opacity=".66"/><rect x="96" y="52" width="18" height="18" rx="2" opacity=".81"/>
+                <rect x="8" y="74" width="18" height="18" rx="2" opacity=".58"/><rect x="30" y="74" width="18" height="18" rx="2" opacity=".78"/><rect x="52" y="74" width="18" height="18" rx="2" opacity=".66"/><rect x="74" y="74" width="18" height="18" rx="2" opacity=".86"/><rect x="96" y="74" width="18" height="18" rx="2" opacity=".70"/>
+                <rect x="8" y="96" width="18" height="18" rx="2" opacity=".68"/><rect x="30" y="96" width="18" height="18" rx="2" opacity=".65"/><rect x="52" y="96" width="18" height="18" rx="2" opacity=".81"/><rect x="74" y="96" width="18" height="18" rx="2" opacity=".70"/><rect x="96" y="96" width="18" height="18" rx="2" opacity=".88"/>
+              </g>
+              <text x="61" y="147" text-anchor="middle" fill="#64748b" font-size="12">directions merge</text>
+            </g>
+            <path d="M469 101 H595" fill="none" stroke="#7c3aed" stroke-width="3" stroke-linecap="round"/>
+            <path d="M595 101 l-10 -6 v12 z" fill="#7c3aed"/>
+            <g transform="translate(606 41)">
+              <text x="61" y="-14" text-anchor="middle" fill="#475569" font-size="13" font-weight="700">rank one</text>
+              <rect width="122" height="122" rx="5" fill="#f8fafc" stroke="#dbe3ee"/>
+              <g fill="#7c3aed" opacity=".76">
+                <rect x="8" y="8" width="18" height="18" rx="2"/><rect x="30" y="8" width="18" height="18" rx="2"/><rect x="52" y="8" width="18" height="18" rx="2"/><rect x="74" y="8" width="18" height="18" rx="2"/><rect x="96" y="8" width="18" height="18" rx="2"/>
+                <rect x="8" y="30" width="18" height="18" rx="2"/><rect x="30" y="30" width="18" height="18" rx="2"/><rect x="52" y="30" width="18" height="18" rx="2"/><rect x="74" y="30" width="18" height="18" rx="2"/><rect x="96" y="30" width="18" height="18" rx="2"/>
+                <rect x="8" y="52" width="18" height="18" rx="2"/><rect x="30" y="52" width="18" height="18" rx="2"/><rect x="52" y="52" width="18" height="18" rx="2"/><rect x="74" y="52" width="18" height="18" rx="2"/><rect x="96" y="52" width="18" height="18" rx="2"/>
+                <rect x="8" y="74" width="18" height="18" rx="2"/><rect x="30" y="74" width="18" height="18" rx="2"/><rect x="52" y="74" width="18" height="18" rx="2"/><rect x="74" y="74" width="18" height="18" rx="2"/><rect x="96" y="74" width="18" height="18" rx="2"/>
+                <rect x="8" y="96" width="18" height="18" rx="2"/><rect x="30" y="96" width="18" height="18" rx="2"/><rect x="52" y="96" width="18" height="18" rx="2"/><rect x="74" y="96" width="18" height="18" rx="2"/><rect x="96" y="96" width="18" height="18" rx="2"/>
+              </g>
+              <text x="61" y="147" text-anchor="middle" fill="#64748b" font-size="12">Σ(ℓ) → Jₙ</text>
+            </g>
+          </svg>
+          <figcaption class="figure-caption">Under the paper's kernel-product conditions, similarities can converge toward the rank-one matrix $J_N$ with depth, including similarities between different classes.</figcaption>
+        </figure>
+
+        <details class="technical-details">
+          <summary>Key theorem: convergence toward the rank-one kernel</summary>
+          <div class="technical-details-body">
+            <p>
+              Under the kernel-product conditions (see the formal definition in the paper), if the leading Lyapunov exponent satisfies $\lambda_1&lt;0$, then
+              $$\left\|\Sigma^{(\ell)}-J_N\right\|_F
+              \le \mathcal O\!\left(e^{-|\lambda_1|\ell/2}\right)
+              \left\|\Sigma^{(0)}-J_N\right\|_F.$$
+              The representation kernel therefore approaches $J_N$ geometrically with depth.
+            </p>
+          </div>
+        </details>
+
+        <h4>Why BP can preserve distinct learning signals</h4>
+        <p>
+          Imagine that cat, dog, and truck images have almost the same features at one layer. The network gives them similar predictions, although their correct labels call for different corrections.
+        </p>
+        <p>
+          <strong>FFA:</strong> Each layer forms a new signal from its local goodness objective. 
+          <!-- For norm-based goodness, that signal is a scalar multiple of the activation used by goodness.  -->
+          If those activations align, their corrections also point along nearly the same line; positive and negative examples may reverse the sign, but add no new direction. This is the analyzed collapsed-gradient case, not a property of every local goodness.
+        </p>
+        <p>
+          <strong>BP:</strong> The final loss uses each image's label. With three classes, the resulting output errors can span more than one direction even when the predictions are nearly identical. Backward Jacobians carry these errors to earlier layers; if they preserve those directions, BP can send varied corrections despite similar current features. A Jacobian can also suppress directions, so this is a possibility rather than a guarantee.
+        </p>
+        <p>
+          $\Sigma$ measures similarity among the <em>features</em>. To see whether the <em>corrections</em> have also become redundant, we use their second-moment matrix $\Gamma$: effective rank near one means that most correction energy lies along one line. Effective learning capacity (ELC) sums the effective rank above this one-direction baseline across layers. It measures the diversity of available learning signals, not a guarantee of task accuracy. In this paper, we show that ELC of BP can increase with depth, while ELC of FFA can remain near one, which also explains the accuracy gap.
+        </p>
+        <details class="technical-details">
+          <summary><span>Technical detail: $\Gamma$, effective rank, and ELC</span></summary>
+          <div class="technical-details-body">
+            <p>Let $\delta^{(\ell),\mathcal A}(x)$ be the error signal algorithm $\mathcal A$ sends to layer $\ell$. Its second-moment matrix is
+              $$\Gamma^{(\ell),\mathcal A}
+              =\mathbb E_x\!\left[\delta^{(\ell),\mathcal A}(x)\delta^{(\ell),\mathcal A}(x)^\top\right].$$
+              For a positive semidefinite matrix $M$, define
+              $$\operatorname{erank}(M)=\frac{(\operatorname{tr}M)^2}{\operatorname{tr}(M^2)},\qquad
+              \operatorname{ELC}(\mathcal A)=\sum_{\ell=1}^{L}\left(\operatorname{erank}(\Gamma^{(\ell),\mathcal A})-1\right).$$
+              Subtracting one removes the rank-one baseline at each layer. The measure does not assert that directions from different layers are mutually orthogonal.</p>
+          </div>
+        </details>
+
+        <details class="technical-details">
+          <summary>Key theorem: effective learning capacity</summary>
+          <div class="technical-details-body">
+            <p>Under the corresponding BP and FFA conditions established in the paper,</p>
+            $$\operatorname{ELC}(\mathrm{BP})=\Omega(L),
+            \qquad
+            \operatorname{ELC}(\mathrm{FFA})=O(1).$$
+            <!-- <p>
+              The FFA statement applies to the analyzed rank-one collapsed-goodness-gradient subclass; the BP statement uses the paper's Jacobian-concentration condition.
+            </p> -->
+          </div>
+        </details>
+
+        <div class="callout">
+          <p><strong>Takeaway.</strong> When representation collapse limits FFA, narrowing its gap to BP calls for preserving task-relevant differences between samples as depth grows. Two possible interventions give local learning more ways to retain those differences.</p>
+        </div>
+
+        <h2 id="possible-repairs">Potential repairs: richer local targets and flatter updates</h2>
+        <h3 id="lce-repair">Give each block a supervised readout</h3>
+        <p>
+          One route gives every block more label information: attach a trainable readout to its output and train that block with cross-entropy against the true label or next token. This is Local Cross-Entropy (LCE). Like FFA, LCE stops gradients at block boundaries, but each block now receives a task-label signal through its own readout rather than a positive/negative goodness signal. In the <a href="#language-scaling">language-model scale sweep</a>, each block has its own vocabulary readout; the displayed parameter counts cover the shared Transformer backbone and exclude these extra heads.
+        </p>
+        <h3 id="spectrum-repair">Spread each weight update across more directions</h3>
+        <p>
+          Another route changes the update geometry directly. For an update $\Delta W=U\operatorname{diag}(s_i)V^\top$, interpolate its squared singular values toward their mean: $\lambda_i(p)^2=(1-p)s_i^2+p\overline{s^2}$. This keeps the update's Frobenius norm fixed while flattening its spectrum as $p$ increases. The <a href="#spectral-intervention">mechanism test below</a> applies this rule to convolutional updates, then measures whether the error-signal spectrum $\Gamma$ and task accuracy improve.
+        </p>
+
+        <h2 id="experiment-details">Explore the measured evidence</h2>
+        <p>
+          The controls below expose the measured sweeps behind the headline results. In the network diagrams, orange dots mark where each block receives local supervision, while the blue dot marks the task loss at the final layer. Orange segments show separate local gradients; the blue reference shows the end-to-end BP pathway.
+        </p>
+
+        <h3 id="vision-locality">Vision: controlled locality intervention</h3>
+        <p>
+          The task is ten-class CIFAR-10 image classification with a fixed 12-layer convolutional network. Grouped FFA trains on true-label positive and wrong-label negative overlays; the slider changes how many contiguous layers share each local goodness objective. Architecture and training protocol stay fixed, so this sweep isolates the block partition.
+        </p>
+        <div class="experiment-panel" id="vision-experiment">
+          <div class="experiment-header">
+            <div class="experiment-title">
+              <h3>CNN12 on CIFAR-10</h3>
+              <p>The backbone always has 12 layers. Only the number of independently trained contiguous blocks changes.</p>
+            </div>
+            <label>
+              <span class="slider-label"><span>Number of blocks</span><output class="slider-value" id="vision-slider-value">12 blocks × 1 layer</output></span>
+              <input id="vision-slider" type="range" min="0" max="5" step="1" value="5" aria-label="CNN12 number of blocks">
+            </label>
+          </div>
+
+          <div class="metric-strip" aria-live="polite">
+            <div class="metric"><span>Best accuracy</span><strong id="vision-accuracy">53.02%</strong></div>
+            <div class="metric"><span>Final local loss</span><strong id="vision-loss">1.1014</strong></div>
+            <div class="metric"><span>Mean erank Γ</span><strong id="vision-rank">2.198</strong></div>
+          </div>
+
+          <div class="network-viz" id="vision-network" aria-label="Gradient flow for the selected CNN12 block partition"></div>
+          <p class="experiment-takeaway"><strong>What the diagram shows.</strong> Fewer block boundaries let each goodness signal assign credit across more of the same 12-layer backbone. From 12 local blocks to one global block, mean accuracy rises from 53.02% to 78.74%, although BP remains higher at 85.67%. The intervention links stricter locality to weaker learning on this fixed task.</p>
+
+          <div class="table-scroll">
+            <table id="vision-table">
+              <thead>
+                <tr><th>Blocks × layers</th><th>Best accuracy</th><th>Final loss</th><th>Mean erank(Γ)</th></tr>
+              </thead>
+              <tbody>
+                <tr data-key="12"><td>12 × 1</td><td>53.02 ± 0.48%</td><td>1.1014 ± 0.0034</td><td>2.198 ± 0.042</td></tr>
+                <tr data-key="6"><td>6 × 2</td><td>58.09 ± 1.85%</td><td>1.0455 ± 0.0068</td><td>5.146 ± 0.592</td></tr>
+                <tr data-key="4"><td>4 × 3</td><td>67.57 ± 4.35%</td><td>1.0064 ± 0.0158</td><td>4.856 ± 0.552</td></tr>
+                <tr data-key="3"><td>3 × 4</td><td>72.22 ± 1.07%</td><td>0.9795 ± 0.0018</td><td>5.135 ± 2.164</td></tr>
+                <tr data-key="2"><td>2 × 6</td><td>76.21 ± 0.48%</td><td>0.9657 ± 0.0027</td><td>7.613 ± 3.828</td></tr>
+                <tr data-key="1"><td>1 × 12</td><td>78.74 ± 4.06%</td><td>0.9550 ± 0.0199</td><td>7.975 ± 1.214</td></tr>
+                <tr class="bp-row"><td>BP</td><td>85.67 ± 0.09%</td><td>5.87e−5 ± 7.13e−5</td><td>31.654 ± 3.793</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p class="interaction-note">Measured means ± sample standard deviation over three seeds. The selected row is highlighted.</p>
+        </div>
+
+        <h3 id="language-scaling">Language modeling: a scale sweep</h3>
+        <p>
+          The task is next-token prediction on an OpenWebText subset with 50 million training tokens and 0.5 million validation tokens. Decoder-only Transformers range from 2-layer Tiny to 12-layer XLarge, use GPT-2 tokenization and 256-token contexts, and are compared by validation perplexity under scale-dependent token budgets. The slider selects a model size; it does not change how a fixed model is partitioned.
+        </p>
+        <div class="experiment-panel" id="language-experiment">
+          <div class="experiment-header">
+            <div class="experiment-title">
+              <h3>Transformer pre-training on OpenWebText</h3>
+              <p>For vanilla FFA, every Transformer layer is its own local block. Model depth, parameter count, and compute budget all increase across this sweep.</p>
+            </div>
+            <label>
+              <span class="slider-label"><span>Model scale</span><output class="slider-value" id="language-slider-value">XLarge · 124M parameters</output></span>
+              <input id="language-slider" type="range" min="0" max="4" step="1" value="4" aria-label="Transformer model scale">
+            </label>
+          </div>
+
+          <div class="metric-strip" aria-live="polite">
+            <div class="metric"><span>BP perplexity</span><strong id="language-bp">28</strong></div>
+            <div class="metric"><span>FFA / BP</span><strong id="language-ffa">9.19×</strong></div>
+            <div class="metric"><span>LCE / BP</span><strong id="language-lce">1.51×</strong></div>
+          </div>
+
+          <div class="network-viz" id="language-network" aria-label="Gradient flow for the selected Transformer model scale"></div>
+          <p class="experiment-takeaway"><strong>What the diagram shows.</strong> Vanilla FFA keeps one local objective per layer as the model grows; LCE uses the same gradient-isolated layout with cross-entropy readouts. Across the measured scales, FFA/BP perplexity grows from 3.73× to 9.19× and LCE/BP from 1.20× to 1.51×. LCE narrows the gap, but neither local method matches BP; this scale sweep does not isolate depth as the cause.</p>
+
+          <div class="table-scroll">
+            <table id="language-table">
+              <thead>
+                <tr><th>Scale</th><th>Layers</th><th>Parameters</th><th>BP PPL</th><th>FFA PPL</th><th>LCE PPL</th><th>FFA/BP</th><th>LCE/BP</th></tr>
+              </thead>
+              <tbody>
+                <tr data-key="2"><td>Tiny</td><td>2</td><td>7M</td><td>138</td><td>516</td><td>166</td><td>3.73×</td><td>1.20×</td></tr>
+                <tr data-key="4"><td>Small</td><td>4</td><td>16M</td><td>68</td><td>313</td><td>84</td><td>4.59×</td><td>1.22×</td></tr>
+                <tr data-key="6"><td>Medium</td><td>6</td><td>30M</td><td>48</td><td>275</td><td>64</td><td>5.74×</td><td>1.33×</td></tr>
+                <tr data-key="8"><td>Large</td><td>8</td><td>51M</td><td>39</td><td>256</td><td>54</td><td>6.55×</td><td>1.38×</td></tr>
+                <tr data-key="12"><td>XLarge</td><td>12</td><td>124M</td><td>28</td><td>258</td><td>42</td><td>9.19×</td><td>1.51×</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p class="interaction-note">This slider selects measured model scales. Because depth, width, parameter count, and compute change together, the trend is not a fixed-architecture causal ablation of locality.</p>
+        </div>
+
+        <h3 id="spectral-intervention">Mechanism test: flattening the update spectrum</h3>
+        <p>
+          On CNN3/CIFAR-10, we apply the <a href="#spectrum-repair">spectral interpolation described above</a> to each convolutional update. The backbone, data, each method's objective and optimizer, and the training budget stay fixed across $p$.
+        </p>
+        <div class="experiment-panel" id="spectral-experiment">
+          <div class="experiment-header">
+            <div class="experiment-title">
+              <h3>CNN3 on CIFAR-10</h3>
+              <p>$p=0$ is the original update; $p=1$ replaces its singular values by a flat spectrum with the same Frobenius norm.</p>
+            </div>
+            <label>
+              <span class="slider-label"><span>Spectral flattening</span><output class="slider-value" id="spectral-slider-value">p = 1.0</output></span>
+              <input id="spectral-slider" type="range" min="0" max="5" step="1" value="5" aria-label="Spectral flattening strength">
+            </label>
+          </div>
+
+          <div class="metric-strip" aria-live="polite">
+            <div class="metric"><span>FFA accuracy</span><strong id="spectral-ffa">57.74%</strong></div>
+            <div class="metric"><span>FFA erank(Γ)</span><strong id="spectral-rank">4.42</strong></div>
+            <div class="metric"><span>Gap to BP</span><strong id="spectral-gap">21.23 pp</strong></div>
+          </div>
+
+          <div class="spectral-viz">
+            <div class="spectral-viz-card">
+              <div class="spectral-viz-head"><strong>Update singular-value spectrum · illustrative</strong><output id="update-rank-value">Update PR = 8.00 / 8</output></div>
+              <svg id="update-spectrum-plot" viewBox="0 0 420 205" role="img" aria-label="Illustrative normalized update spectrum at p equals 1"></svg>
+              <p>Bars show singular values of one eight-direction example with fixed Frobenius norm. Update PR is the participation ratio of their squared values.</p>
+            </div>
+            <div class="spectral-viz-card">
+              <div class="spectral-viz-head"><strong>FFA error-signal rank · measured</strong><output id="signal-rank-value">erank(Γ) = 4.42</output></div>
+              <svg id="signal-rank-plot" viewBox="0 0 420 205" role="img" aria-label="Measured FFA error-signal effective rank across flattening strengths, selected p equals 1"></svg>
+              <p>Points are terminal mean layerwise erank(Γ), averaged over three seeds. The highlighted point follows the slider.</p>
+            </div>
+          </div>
+          <p class="spectral-viz-note">The left spectrum illustrates the exact interpolation rule on an example; its bars are not measured CNN update singular values. The right plot uses the measured error-signal ranks in the table. These ranks describe different matrices.</p>
+          <p class="experiment-takeaway"><strong>What the plots show.</strong> Increasing $p$ spreads update energy across more directions by construction. The measured FFA error-signal rank rises overall, though not monotonically, and accuracy improves by 10.34 points from $p=0$ to $p=1$. A 21.23-point gap to BP remains at $p=1$, so flattening helps without closing the locality gap.</p>
+
+          <div class="table-scroll">
+            <table id="spectral-table">
+              <thead>
+                <tr><th>Flattening $p$</th><th>BP accuracy</th><th>FFA accuracy</th><th>BP erank(Γ)</th><th>FFA erank(Γ)</th></tr>
+              </thead>
+              <tbody>
+                <tr data-key="0"><td>0.0</td><td>77.56 ± 0.75%</td><td>47.40 ± 0.98%</td><td>42.78 ± 2.27</td><td>3.43 ± 0.49</td></tr>
+                <tr data-key="1"><td>0.2</td><td>78.80 ± 0.39%</td><td>53.41 ± 1.25%</td><td>50.75 ± 2.04</td><td>3.85 ± 0.24</td></tr>
+                <tr data-key="2"><td>0.4</td><td>79.08 ± 0.17%</td><td>55.30 ± 1.21%</td><td>53.01 ± 0.75</td><td>4.27 ± 0.43</td></tr>
+                <tr data-key="3"><td>0.6</td><td>79.11 ± 0.27%</td><td>55.87 ± 1.65%</td><td>53.85 ± 3.61</td><td>3.95 ± 0.83</td></tr>
+                <tr data-key="4"><td>0.8</td><td>79.13 ± 0.43%</td><td>57.27 ± 1.15%</td><td>50.84 ± 1.38</td><td>4.49 ± 0.64</td></tr>
+                <tr data-key="5"><td>1.0</td><td>78.97 ± 0.29%</td><td>57.74 ± 0.50%</td><td>44.48 ± 1.96</td><td>4.42 ± 0.61</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p class="interaction-note">Flattening improves FFA by 10.34 points, providing intervention evidence that update geometry matters. The remaining 21.23-point gap shows that geometry alone does not remove the cost of locality.</p>
+        </div>
+
+        <h2 id="design-lessons">What should better local learning preserve?</h2>
+        <p>
+          The diagnosis suggests that improving the scalar goodness alone is not enough. A scalable local method must optimize locally without losing the distinctions needed by the global task.
+        </p>
+        <ul class="design-list">
+          <li><strong>Stabilize the target seen by each block.</strong> Limit upstream drift or explicitly track it during concurrent updates.</li>
+          <li><strong>Allow selective cross-block communication.</strong> Even a limited global correction can coordinate otherwise independent objectives.</li>
+          <li><strong>Preserve diverse learning directions.</strong> Monitor representation and error-signal effective rank, not only local loss.</li>
+          <li><strong>Evaluate the actual task.</strong> Local convergence is an optimization diagnostic, not a substitute for downstream accuracy or perplexity.</li>
+        </ul>
+
+        <!-- <h2 id="limitations">Scope and limitations</h2>
+        <p>
+          The results isolate two provable mechanisms, not an exhaustive explanation of every FFA failure. The convergence results are local and conditional; the multi-layer residual is an upper-bound term rather than a lower-bound impossibility result; kernel collapse requires the stated stationary product conditions; and the FFA capacity conclusion applies to the rank-one collapsed-gradient subclass. These boundaries matter when transferring the conclusions to other architectures or richer local objectives.
+        </p>
+        <p>
+          In particular, the paper does not claim that all local learning is doomed, that spectral flattening is a complete remedy, or that the language-model scale sweep isolates depth causally. The results instead identify concrete failure modes that future local algorithms should test and avoid.
+        </p> -->
+
+        <h2 id="bibtex">BibTeX</h2>
+        <div class="bibtex-wrap">
+          <button class="copy-button" type="button" data-copy="bibtex-code">Copy</button>
+          <pre class="bibtex-block" id="bibtex-code">@inproceedings{wu2026price,
+  title     = {The Price of Locality: Why Forward-Forward Underperforms Backpropagation?},
+  author    = {Wu, Zhaoxian and Liu, Haichuan and Chen, Tianyi},
+  booktitle = {Advances in Neural Information Processing Systems},
+  year      = {2026},
+  url       = {https://arxiv.org/abs/2609.33240}
+}</pre>
+        </div>
+      </article>
+    </main>
+  </div>
+
+  <footer class="footer">
+    <p>FFA Theory · Cornell Tech and Cornell University · <a href="https://github.com/Zhaoxian-Wu/ffa-theory" target="_blank" rel="noreferrer">Source code</a> · <a href="#top">Back to top ↑</a></p>
+  </footer>
+
+  <script>
+    (function () {
+      const bpFlow = document.getElementById('bp-flow');
+      const ffaFlow = document.getElementById('ffa-flow');
+      const flowToggle = document.getElementById('flow-toggle');
+      const flowStep = document.getElementById('flow-step');
+      const memoryChart = document.getElementById('memory-chart');
+      const memoryPlot = document.getElementById('memory-plot');
+      const memoryReading = document.getElementById('memory-reading');
+      const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+      const bpLiveMemory = Array.from({ length: 12 }, (_, index) => index < 6 ? index + 1 : 11 - index);
+      const bpPeakMemory = Array.from({ length: 12 }, (_, index) => Math.min(index + 1, 6));
+      const ffaMemory = Array(12).fill(1);
+      let flowFrame = 0;
+      let flowPosition = 0;
+      let flowPlaying = !reducedMotion.matches;
+      let flowAnimation = null;
+      let flowLastTime = null;
+      let chartHasLooped = false;
+      let hoveredLayer = null;
+      let focusedLayer = null;
+      let hoveredChartStep = null;
+
+      function inspectedLayer() {
+        return hoveredLayer || focusedLayer;
+      }
+
+      function renderFlowPanel(panel, kind) {
+        const isBp = kind === 'BP';
+        const backward = isBp && flowFrame >= 6;
+        const current = isBp ? (backward ? 12 - flowFrame : flowFrame + 1) : Math.floor(flowFrame / 2) + 1;
+        const ffaUpdating = flowFrame % 2 === 0;
+        const stored = (isBp ? bpLiveMemory : ffaMemory)[flowFrame];
+        const inspected = inspectedLayer();
+
+        panel.querySelectorAll('.anim-layer').forEach((layer) => {
+          const number = Number(layer.dataset.layer);
+          const hasActivation = isBp ? (backward ? number < current : number <= current) : number === current;
+          const hasUpdated = isBp ? backward && number >= current : number < current || (number === current && !ffaUpdating);
+          layer.classList.toggle('is-stored', hasActivation);
+          layer.classList.toggle('is-updated', hasUpdated);
+          layer.classList.toggle('is-current', number === current);
+          layer.classList.toggle('is-inspected', inspected?.panel === panel && inspected.number === number);
+          layer.setAttribute('aria-label', `${kind} layer ${number}: ${hasUpdated ? 'updated once' : 'not yet updated'}; activation ${hasActivation ? 'currently stored' : 'not currently stored'}. Focus to inspect its lifetime.`);
+        });
+
+        panel.querySelectorAll('.objective-node').forEach((node, index) => {
+          node.classList.toggle('is-active', isBp ? flowFrame >= 5 : index + 1 === current && ffaUpdating);
+          node.classList.toggle('is-complete', !isBp && (index + 1 < current || (index + 1 === current && !ffaUpdating)));
+        });
+
+        let message;
+        if (inspected?.panel === panel) {
+          message = isBp
+            ? `L${inspected.number}: store after forward; release when backward reaches L${inspected.number}.`
+            : `L${inspected.number}: apply local supervision using the reusable activation buffer.`;
+        } else if (isBp) {
+          message = backward
+            ? `Backward update at L${current} complete; activation released.`
+            : `Forward through L${current}; keep its activation for backward.`;
+        } else {
+          message = ffaUpdating
+            ? `L${current} receives local supervision using one buffer.`
+            : `L${current} local update complete; the buffer can be reused.`;
+        }
+        panel.querySelector('.flow-message').textContent = message;
+        panel.querySelector('.memory-count').textContent = isBp ? `${stored} / 6 stored` : '1 buffer in use';
+      }
+
+      function renderMemoryChart() {
+        if (memoryChart.hidden) return;
+        const width = Math.max(240, Math.round(memoryPlot.clientWidth || memoryChart.clientWidth - 32 || 640));
+        const left = 36;
+        const right = width - 12;
+        const top = 27;
+        const bottom = 169;
+        const x = (index) => left + index * (right - left) / 11;
+        const y = (buffers) => bottom - buffers * (bottom - top) / 6;
+        const base = Math.min(11, Math.floor(flowPosition));
+        const fraction = base === 11 ? 0 : flowPosition - base;
+        const valueAt = (series) => series[base] + (series[Math.min(base + 1, 11)] - series[base]) * fraction;
+        const bpNow = valueAt(bpPeakMemory);
+        const ffaNow = valueAt(ffaMemory);
+        const overlap = Math.max(0, 1 - Math.abs(bpNow - ffaNow) * 2);
+        const markerX = x(Math.min(flowPosition, 11));
+        const liveOpacity = flowPosition > 11 ? 12 - flowPosition : (chartHasLooped ? Math.min(1, flowPosition * 4) : 1);
+        const points = (series) => {
+          const complete = series.slice(0, base + 1).map((value, index) => `${x(index)},${y(value)}`);
+          if (fraction > 0) complete.push(`${markerX},${y(valueAt(series))}`);
+          return complete.join(' ');
+        };
+        const grid = [0, 2, 4, 6].map((value) => `
+          <line class="chart-grid" x1="${left}" y1="${y(value)}" x2="${right}" y2="${y(value)}"/>
+          <text class="chart-label" x="${left - 9}" y="${y(value) + 4}" text-anchor="end">${value}</text>`).join('');
+        const ticks = Array.from({ length: 12 }, (_, index) => `
+          <line class="chart-axis" x1="${x(index)}" y1="${bottom}" x2="${x(index)}" y2="${bottom + 5}"/>
+          <text class="chart-label" x="${x(index)}" y="${bottom + 20}" text-anchor="middle">${index + 1}</text>`).join('');
+        const ffaX = markerX + 5 * overlap;
+        const ffaY = y(ffaNow);
+        const hoverOverlap = hoveredChartStep === 0 ? 5 : 0;
+        const hoverMarks = hoveredChartStep === null ? '' : `
+          <g class="chart-hover">
+            <line class="chart-hover-line" x1="${x(hoveredChartStep)}" y1="${top}" x2="${x(hoveredChartStep)}" y2="${bottom}"/>
+            <circle class="chart-hover-bp" cx="${x(hoveredChartStep) - hoverOverlap}" cy="${y(bpPeakMemory[hoveredChartStep])}" r="5"/>
+            <circle class="chart-hover-ffa" cx="${x(hoveredChartStep) + hoverOverlap}" cy="${y(1)}" r="5"/>
+          </g>`;
+
+        memoryPlot.setAttribute('viewBox', `0 0 ${width} 214`);
+        memoryPlot.innerHTML = `
+          <title id="memory-plot-title">Peak activation-buffer capacity during one training pass</title>
+          <desc id="memory-plot-desc">Step ${base + 1} of 12: BP has reached a peak of ${bpPeakMemory[base]} layer-buffer units and FFA uses one reusable buffer. Click the plot to choose a step; values are illustrative units, not measured GPU bytes.</desc>
+          <text class="chart-label" x="${left}" y="14">Peak layer-buffer units</text>
+          ${grid}
+          <line class="chart-axis" x1="${left}" y1="${top}" x2="${left}" y2="${bottom}"/>
+          <line class="chart-axis" x1="${left}" y1="${bottom}" x2="${right}" y2="${bottom}"/>
+          ${ticks}
+          <g class="chart-live" opacity="${liveOpacity}">
+            <line class="chart-cursor" x1="${markerX}" y1="${top}" x2="${markerX}" y2="${bottom}"/>
+            <polyline class="chart-bp-line" points="${points(bpPeakMemory)}"/>
+            <polyline class="chart-ffa-line" points="${points(ffaMemory)}"/>
+            <circle class="chart-bp-point" cx="${markerX - 5 * overlap}" cy="${y(bpNow)}" r="4.5"/>
+            <polygon class="chart-ffa-point" points="${ffaX},${ffaY - 5} ${ffaX + 5},${ffaY} ${ffaX},${ffaY + 5} ${ffaX - 5},${ffaY}"/>
+          </g>
+          ${hoverMarks}
+          <text class="chart-label" x="${(left + right) / 2}" y="208" text-anchor="middle">Step in training pass</text>
+          <rect class="chart-hit" x="${left}" y="${top}" width="${right - left}" height="${bottom + 26 - top}"/>`;
+        memoryReading.textContent = hoveredChartStep === null
+          ? `Step ${base + 1}/12 · BP peak ${bpPeakMemory[base]} · FFA ${ffaMemory[base]} buffers`
+          : `Hover step ${hoveredChartStep + 1}/12 · BP peak ${bpPeakMemory[hoveredChartStep]} · FFA 1 buffer`;
+      }
+
+      function renderFlows() {
+        renderFlowPanel(bpFlow, 'BP');
+        renderFlowPanel(ffaFlow, 'FFA');
+        flowToggle.textContent = flowPlaying ? 'Pause' : 'Play';
+      }
+
+      function advanceFlow(now) {
+        if (flowLastTime !== null) {
+          const elapsed = Math.min(64, Math.max(0, now - flowLastTime));
+          const nextPosition = (flowPosition + elapsed / 900) % 12;
+          if (nextPosition < flowPosition) chartHasLooped = true;
+          flowPosition = nextPosition;
+          const nextFrame = Math.floor(flowPosition);
+          if (nextFrame !== flowFrame) {
+            flowFrame = nextFrame;
+            renderFlows();
+          }
+          renderMemoryChart();
+        }
+        flowLastTime = now;
+        flowAnimation = window.requestAnimationFrame(advanceFlow);
+      }
+
+      function updateMotion() {
+        if (flowPlaying && !inspectedLayer() && !plotPress) {
+          if (flowAnimation === null) {
+            flowLastTime = null;
+            flowAnimation = window.requestAnimationFrame(advanceFlow);
+          }
+        } else if (flowAnimation !== null) {
+          window.cancelAnimationFrame(flowAnimation);
+          flowAnimation = null;
+          flowLastTime = null;
+        }
+      }
+
+      [bpFlow, ffaFlow].forEach((panel) => {
+        panel.querySelectorAll('.anim-layer').forEach((layer) => {
+          const selection = { panel, number: Number(layer.dataset.layer) };
+          layer.addEventListener('pointerenter', () => {
+            hoveredLayer = selection;
+            renderFlows();
+            updateMotion();
+          });
+          layer.addEventListener('pointerleave', () => {
+            if (hoveredLayer === selection) hoveredLayer = null;
+            renderFlows();
+            updateMotion();
+          });
+          layer.addEventListener('focus', () => {
+            focusedLayer = selection;
+            renderFlows();
+            updateMotion();
+          });
+          layer.addEventListener('blur', () => {
+            if (focusedLayer === selection) focusedLayer = null;
+            renderFlows();
+            updateMotion();
+          });
+        });
+      });
+
+      function selectFlowStep(index) {
+        flowPlaying = false;
+        flowFrame = Math.max(0, Math.min(11, Math.round(index)));
+        flowPosition = flowFrame;
+        chartHasLooped = false;
+        hoveredChartStep = null;
+        renderFlows();
+        renderMemoryChart();
+        updateMotion();
+      }
+
+      function plotStepAt(event) {
+        const bounds = memoryPlot.getBoundingClientRect();
+        if (!bounds.width || !bounds.height) return null;
+        const svgY = (event.clientY - bounds.top) * 214 / bounds.height;
+        if (svgY < 27 || svgY > 195) return null;
+        const width = Number(memoryPlot.getAttribute('viewBox').split(' ')[2]);
+        const svgX = (event.clientX - bounds.left) * width / bounds.width;
+        return Math.max(0, Math.min(11, Math.round((svgX - 36) * 11 / (width - 48))));
+      }
+
+      let plotPress = null;
+      memoryPlot.addEventListener('pointermove', (event) => {
+        if (event.pointerType === 'touch') return;
+        const step = plotStepAt(event);
+        if (step === hoveredChartStep) return;
+        hoveredChartStep = step;
+        renderMemoryChart();
+      });
+
+      memoryPlot.addEventListener('pointerleave', () => {
+        if (hoveredChartStep === null) return;
+        hoveredChartStep = null;
+        renderMemoryChart();
+      });
+
+      memoryPlot.addEventListener('pointerdown', (event) => {
+        if (event.pointerType === 'mouse' && event.button !== 0) return;
+        if (plotStepAt(event) === null) return;
+        plotPress = { id: event.pointerId, x: event.clientX, y: event.clientY };
+        if (memoryPlot.setPointerCapture) memoryPlot.setPointerCapture(event.pointerId);
+        updateMotion();
+      });
+
+      memoryPlot.addEventListener('pointerup', (event) => {
+        if (!plotPress || plotPress.id !== event.pointerId) return;
+        const press = plotPress;
+        plotPress = null;
+        if (memoryPlot.hasPointerCapture?.(event.pointerId)) memoryPlot.releasePointerCapture(event.pointerId);
+        if (Math.hypot(event.clientX - press.x, event.clientY - press.y) > 10) {
+          updateMotion();
+          return;
+        }
+        const index = plotStepAt(event);
+        if (index === null) {
+          updateMotion();
+          return;
+        }
+        selectFlowStep(index);
+        memoryChart.focus({ preventScroll: true });
+      });
+
+      memoryPlot.addEventListener('pointercancel', () => {
+        plotPress = null;
+        updateMotion();
+      });
+
+      memoryChart.addEventListener('keydown', (event) => {
+        let index;
+        if (event.key === 'ArrowRight') index = Math.min(11, flowFrame + 1);
+        else if (event.key === 'ArrowLeft') index = Math.max(0, flowFrame - 1);
+        else if (event.key === 'Home') index = 0;
+        else if (event.key === 'End') index = 11;
+        else return;
+        event.preventDefault();
+        selectFlowStep(index);
+      });
+
+      flowToggle.addEventListener('click', () => {
+        flowPlaying = !flowPlaying;
+        renderFlows();
+        updateMotion();
+      });
+      flowStep.addEventListener('click', () => {
+        selectFlowStep((flowFrame + 1) % 12);
+      });
+      reducedMotion.addEventListener('change', (event) => {
+        flowPlaying = !event.matches;
+        renderFlows();
+        updateMotion();
+      });
+      window.addEventListener('resize', renderMemoryChart, { passive: true });
+      renderFlows();
+      renderMemoryChart();
+      updateMotion();
+
+      const visionData = [
+        { blocks: 1, layers: 12, accuracy: '78.74%', loss: '0.9550', rank: '7.975' },
+        { blocks: 2, layers: 6, accuracy: '76.21%', loss: '0.9657', rank: '7.613' },
+        { blocks: 3, layers: 4, accuracy: '72.22%', loss: '0.9795', rank: '5.135' },
+        { blocks: 4, layers: 3, accuracy: '67.57%', loss: '1.0064', rank: '4.856' },
+        { blocks: 6, layers: 2, accuracy: '58.09%', loss: '1.0455', rank: '5.146' },
+        { blocks: 12, layers: 1, accuracy: '53.02%', loss: '1.1014', rank: '2.198' }
+      ];
+
+      const languageData = [
+        { depth: 2, scale: 'Tiny', parameters: '7M', bp: '138', ffa: '3.73×', lce: '1.20×' },
+        { depth: 4, scale: 'Small', parameters: '16M', bp: '68', ffa: '4.59×', lce: '1.22×' },
+        { depth: 6, scale: 'Medium', parameters: '30M', bp: '48', ffa: '5.74×', lce: '1.33×' },
+        { depth: 8, scale: 'Large', parameters: '51M', bp: '39', ffa: '6.55×', lce: '1.38×' },
+        { depth: 12, scale: 'XLarge', parameters: '124M', bp: '28', ffa: '9.19×', lce: '1.51×' }
+      ];
+
+      const spectralData = [
+        { p: '0.0', bp: 77.56, ffa: 47.40, rank: '3.43' },
+        { p: '0.2', bp: 78.80, ffa: 53.41, rank: '3.85' },
+        { p: '0.4', bp: 79.08, ffa: 55.30, rank: '4.27' },
+        { p: '0.6', bp: 79.11, ffa: 55.87, rank: '3.95' },
+        { p: '0.8', bp: 79.13, ffa: 57.27, rank: '4.49' },
+        { p: '1.0', bp: 78.97, ffa: 57.74, rank: '4.42' }
+      ];
+
+      function renderNetwork(target, totalLayers, blocks, options) {
+        const layersPerBlock = totalLayers / blocks;
+        const summary = options.summary || `${blocks} objective${blocks === 1 ? '' : 's'}`;
+        const layers = Array.from({ length: totalLayers }, (_, index) =>
+          `<span class="network-layer">L${index + 1}</span>`
+        ).join('');
+
+        const localObjectives = Array.from({ length: blocks }, (_, index) =>
+          `<span class="network-objective-dot" style="grid-column:${(index + 1) * layersPerBlock}"></span>`
+        ).join('');
+
+        const gradients = Array.from({ length: blocks }, (_, index) => {
+          const label = layersPerBlock === 1 ? `local ${index + 1}` : `block ${index + 1} gradient`;
+          return `<span class="gradient-block" style="--span:${layersPerBlock}" aria-label="${label}, spanning ${layersPerBlock} layer${layersPerBlock === 1 ? '' : 's'}"><span>${label}</span></span>`;
+        }).join('');
+
+        target.innerHTML = `
+          <div class="network-viz-inner" style="--layers:${totalLayers}">
+            <div class="network-row-label"><span>${options.architecture}</span><span>${summary}</span></div>
+            <div class="forward-flow" aria-hidden="true"></div>
+            <div class="network-objective-track" aria-hidden="true">${localObjectives}</div>
+            <div class="network-layers">${layers}</div>
+            <div class="gradient-blocks">${gradients}</div>
+            <div class="network-objective-track bp-objectives" aria-hidden="true"><span class="network-objective-dot" style="grid-column:${totalLayers}"></span></div>
+            <div class="bp-gradient">BP reference: one task gradient spans all ${totalLayers} layers</div>
+          </div>`;
+      }
+
+      function selectRow(table, key) {
+        table.querySelectorAll('tbody tr[data-key]').forEach((row) => {
+          row.classList.toggle('active-row', row.dataset.key === String(key));
+        });
+      }
+
+      const visionSlider = document.getElementById('vision-slider');
+      const visionTable = document.getElementById('vision-table');
+      const visionNetwork = document.getElementById('vision-network');
+
+      function updateVision() {
+        const datum = visionData[Number(visionSlider.value)];
+        document.getElementById('vision-slider-value').textContent = `${datum.blocks} block${datum.blocks === 1 ? '' : 's'} × ${datum.layers} layer${datum.layers === 1 ? '' : 's'}`;
+        document.getElementById('vision-accuracy').textContent = datum.accuracy;
+        document.getElementById('vision-loss').textContent = datum.loss;
+        document.getElementById('vision-rank').textContent = datum.rank;
+        renderNetwork(visionNetwork, 12, datum.blocks, { architecture: 'Grouped FFA · fixed CNN12' });
+        selectRow(visionTable, datum.blocks);
+      }
+
+      const languageSlider = document.getElementById('language-slider');
+      const languageTable = document.getElementById('language-table');
+      const languageNetwork = document.getElementById('language-network');
+
+      function updateLanguage() {
+        const datum = languageData[Number(languageSlider.value)];
+        document.getElementById('language-slider-value').textContent = `${datum.scale} · ${datum.parameters} parameters`;
+        document.getElementById('language-bp').textContent = datum.bp;
+        document.getElementById('language-ffa').textContent = datum.ffa;
+        document.getElementById('language-lce').textContent = datum.lce;
+        renderNetwork(languageNetwork, datum.depth, datum.depth, {
+          architecture: `Vanilla FFA · ${datum.scale} Transformer`,
+          summary: `${datum.depth} layers · ${datum.parameters} parameters`
+        });
+        selectRow(languageTable, datum.depth);
+      }
+
+      const spectralSlider = document.getElementById('spectral-slider');
+      const spectralTable = document.getElementById('spectral-table');
+      const updateSpectrumPlot = document.getElementById('update-spectrum-plot');
+      const signalRankPlot = document.getElementById('signal-rank-plot');
+      const exampleSquaredSingularValues = [0.64, 0.18, 0.09, 0.04, 0.025, 0.015, 0.007, 0.003];
+
+      function renderSpectralPlots(index) {
+        const p = Number(spectralData[index].p);
+        const energy = exampleSquaredSingularValues.map((value) => (1 - p) * value + p / exampleSquaredSingularValues.length);
+        const singularValues = energy.map(Math.sqrt);
+        const updateRank = 1 / energy.reduce((sum, value) => sum + value * value, 0);
+        const spectrumX = (direction) => 52 + direction * 43;
+        const spectrumY = (value) => 158 - value / 0.85 * 120;
+
+        updateSpectrumPlot.innerHTML = `
+          <line x1="42" y1="158" x2="400" y2="158" stroke="#94a3b8"/>
+          <line x1="42" y1="101.5" x2="400" y2="101.5" stroke="#dbe3ee"/>
+          <line x1="42" y1="45" x2="400" y2="45" stroke="#dbe3ee"/>
+          <text x="35" y="162" text-anchor="end" fill="#64748b" font-size="11">0</text>
+          <text x="35" y="105" text-anchor="end" fill="#64748b" font-size="11">0.4</text>
+          <text x="35" y="49" text-anchor="end" fill="#64748b" font-size="11">0.8</text>
+          ${singularValues.map((value, direction) => `
+            <rect x="${spectrumX(direction)}" y="${spectrumY(value)}" width="26" height="${158 - spectrumY(value)}" rx="3" fill="#d87822"/>
+            <text x="${spectrumX(direction) + 13}" y="177" text-anchor="middle" fill="#64748b" font-size="11">${direction + 1}</text>
+          `).join('')}
+          <text x="220" y="198" text-anchor="middle" fill="#64748b" font-size="11">Singular direction</text>`;
+        updateSpectrumPlot.setAttribute('aria-label', `Illustrative singular values at p = ${p.toFixed(1)}; update participation-ratio rank ${updateRank.toFixed(2)} out of 8`);
+        document.getElementById('update-rank-value').textContent = `Update PR = ${updateRank.toFixed(2)} / 8`;
+
+        const rankX = (point) => 43 + point * 66;
+        const rankY = (rank) => 158 - (rank - 3) / 2 * 120;
+        const rankValues = spectralData.map((datum) => Number(datum.rank));
+        const rankPath = rankValues.map((rank, point) => `${point === 0 ? 'M' : 'L'}${rankX(point)} ${rankY(rank)}`).join(' ');
+        signalRankPlot.innerHTML = `
+          <line x1="43" y1="158" x2="386" y2="158" stroke="#94a3b8"/>
+          <line x1="43" y1="98" x2="386" y2="98" stroke="#dbe3ee"/>
+          <line x1="43" y1="38" x2="386" y2="38" stroke="#dbe3ee"/>
+          <text x="34" y="162" text-anchor="end" fill="#64748b" font-size="11">3</text>
+          <text x="34" y="102" text-anchor="end" fill="#64748b" font-size="11">4</text>
+          <text x="34" y="42" text-anchor="end" fill="#64748b" font-size="11">5</text>
+          <path d="${rankPath}" fill="none" stroke="#d87822" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+          ${rankValues.map((rank, point) => `
+            <circle cx="${rankX(point)}" cy="${rankY(rank)}" r="${point === index ? 7 : 4}" fill="${point === index ? '#fff' : '#d87822'}" stroke="#d87822" stroke-width="${point === index ? 3 : 1}"/>
+            <text x="${rankX(point)}" y="177" text-anchor="middle" fill="#64748b" font-size="11">${spectralData[point].p}</text>
+          `).join('')}
+          <text x="215" y="198" text-anchor="middle" fill="#64748b" font-size="11">Flattening p</text>`;
+        signalRankPlot.setAttribute('aria-label', `Measured FFA error-signal effective rank across flattening strengths; at p = ${p.toFixed(1)}, rank is ${rankValues[index].toFixed(2)}`);
+        document.getElementById('signal-rank-value').textContent = `erank(Γ) = ${rankValues[index].toFixed(2)}`;
+      }
+
+      function updateSpectral() {
+        const index = Number(spectralSlider.value);
+        const datum = spectralData[index];
+        document.getElementById('spectral-slider-value').textContent = `p = ${datum.p}`;
+        document.getElementById('spectral-ffa').textContent = `${datum.ffa.toFixed(2)}%`;
+        document.getElementById('spectral-rank').textContent = datum.rank;
+        document.getElementById('spectral-gap').textContent = `${(datum.bp - datum.ffa).toFixed(2)} pp`;
+        renderSpectralPlots(index);
+        selectRow(spectralTable, index);
+      }
+
+      visionSlider.addEventListener('input', updateVision);
+      languageSlider.addEventListener('input', updateLanguage);
+      spectralSlider.addEventListener('input', updateSpectral);
+      updateVision();
+      updateLanguage();
+      updateSpectral();
+
+      const content = document.querySelector('.project-content');
+      const tocNav = document.getElementById('project-toc-nav');
+      const headings = [...content.querySelectorAll('h2, h3')].filter((heading) =>
+        heading.parentElement === content || heading.id === 'tldr'
+      );
+      const tocList = document.createElement('ul');
+      let subList = null;
+
+      headings.forEach((heading, index) => {
+        if (!heading.id) heading.id = `section-${index + 1}`;
+        const item = document.createElement('li');
+        const link = document.createElement('a');
+        link.href = `#${heading.id}`;
+        link.textContent = heading.textContent.replace(/^\s*\d+(\.\d+)*\.?\s*/, '');
+        link.dataset.target = heading.id;
+        item.appendChild(link);
+
+        if (heading.tagName === 'H2') {
+          tocList.appendChild(item);
+          subList = null;
+        } else {
+          if (!subList) {
+            subList = document.createElement('ul');
+            const parent = tocList.lastElementChild;
+            if (parent) parent.appendChild(subList);
+          }
+          item.classList.add('toc-sub');
+          if (subList) subList.appendChild(item);
+        }
+      });
+      tocNav.appendChild(tocList);
+
+      const tocLinks = [...tocNav.querySelectorAll('a')];
+      function updateToc() {
+        const top = window.scrollY + 120;
+        let current = headings[0] ? headings[0].id : '';
+        headings.forEach((heading) => {
+          if (heading.offsetTop <= top) current = heading.id;
+        });
+        tocLinks.forEach((link) => link.classList.toggle('active', link.dataset.target === current));
+      }
+      window.addEventListener('scroll', updateToc, { passive: true });
+      window.addEventListener('resize', updateToc, { passive: true });
+      updateToc();
+
+      document.querySelectorAll('[data-copy]').forEach((button) => {
+        button.addEventListener('click', async () => {
+          const source = document.getElementById(button.dataset.copy);
+          try {
+            await navigator.clipboard.writeText(source.textContent.trim());
+            button.textContent = 'Copied';
+            setTimeout(() => { button.textContent = 'Copy'; }, 1500);
+          } catch {
+            const range = document.createRange();
+            const selection = window.getSelection();
+            range.selectNodeContents(source);
+            selection.removeAllRanges();
+            selection.addRange(range);
+            button.textContent = 'Selected';
+          }
+        });
+      });
+    }());
+  </script>
+</body>
+</html>
