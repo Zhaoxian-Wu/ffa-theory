@@ -3,6 +3,7 @@
 Official code for **The Price of Locality: Why Forward-Forward Underperforms
 Backpropagation?** by Zhaoxian Wu, Haichuan Liu, and Tianyi Chen.
 
+[Project Page](https://zhaoxian-wu.github.io/ffa-theory/)
 [Paper](https://arxiv.org/abs/2609.33240)
 [PDF](https://arxiv.org/pdf/2609.33240)
 
